@@ -1,7 +1,4 @@
-"""
-Traductor EN → ES usando Argos Translate
-Requiere: pip install argostranslate
-"""
+# Traductor ingles → español, usando Argos Translate Requiere: pip install argostranslate
 
 import tkinter as tk
 from tkinter import ttk, messagebox
