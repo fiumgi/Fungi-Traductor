@@ -1,23 +1,14 @@
-"""
-app.py — Punto de entrada de Fungi Traductor.
-
-Uso:
-    python app.py
-
-Requiere:
-    pip install -r requirements.txt
-"""
-from view       import TranslatorView
-from model      import TranslatorModel
-from controller import TranslatorController
+from fungi_traductor.view.gui import TranslatorView # importamos la vista del traductor
+from fungi_traductor.model.translator import TranslatorModel # importamos el modelo del traductor
+from fungi_traductor.controller.app_controller import TranslatorController# importamos el controlador del traductor
 
 
-def main():
-    view       = TranslatorView()
-    model      = TranslatorModel()
-    _ctrl      = TranslatorController(view, model)  # conecta todo
+def main(): # función principal del programa
+    view  = TranslatorView() 
+    model = TranslatorModel()
+    _ctrl = TranslatorController(view, model)
     view.mainloop()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": # si el archivo se ejecuta directamente, se llama a la función main
     main()
