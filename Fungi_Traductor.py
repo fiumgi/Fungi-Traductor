@@ -5,7 +5,7 @@ from tkinter import ttk, messagebox
 import threading
 
 
-# ── Colores y fuentes ──────────────────────────────────────────────────────────
+#  Colores y fuentes 
 BG        = "#0f1117"
 PANEL     = "#1a1d27"
 ACCENT    = "#4f8ef7"
@@ -34,10 +34,10 @@ class TranslatorApp(tk.Tk):
         self._building_ui()
         self._load_model_async()
 
-    # ── UI ────────────────────────────────────────────────────────────────────
+    #   UI
 
     def _building_ui(self):
-        # ── Encabezado ──
+        #   Encabezado 
         header = tk.Frame(self, bg=BG, pady=18)
         header.pack(fill="x", padx=30)
 
@@ -48,10 +48,10 @@ class TranslatorApp(tk.Tk):
                                    font=FONT_LABEL, bg=BG, fg=SUBTEXT)
         self.status_dot.pack(side="right", pady=6)
 
-        # ── Separador ──
+        #    Separador 
         tk.Frame(self, bg=BORDER, height=1).pack(fill="x", padx=30)
 
-        # ── Etiquetas de idioma ──
+        #    Etiquetas de idioma
         lang_bar = tk.Frame(self, bg=BG, pady=10)
         lang_bar.pack(fill="x", padx=30)
 
@@ -65,7 +65,7 @@ class TranslatorApp(tk.Tk):
         tk.Label(lang_frame, text="Español", font=FONT_LABEL,
                  bg=PANEL, fg=SUCCESS).pack(side="left", padx=6)
 
-        # ── Paneles de texto ──
+        #    Paneles de texto 
         panels = tk.Frame(self, bg=BG)
         panels.pack(fill="both", expand=True, padx=30, pady=(0, 10))
         panels.columnconfigure(0, weight=1)
@@ -110,7 +110,7 @@ class TranslatorApp(tk.Tk):
         )
         self.output_text.pack(fill="both", expand=True)
 
-        # ── Barra inferior ──
+        #   Barra inferior 
         bottom = tk.Frame(self, bg=BG, pady=12)
         bottom.pack(fill="x", padx=30)
 
@@ -151,7 +151,7 @@ class TranslatorApp(tk.Tk):
         # bind contador
         self.input_text.bind("<KeyRelease>", self._update_counter)
 
-    # ── Modelo ────────────────────────────────────────────────────────────────
+    #    Modelo  
 
     def _load_model_async(self):
         t = threading.Thread(target=self._load_model, daemon=True)
@@ -196,7 +196,7 @@ class TranslatorApp(tk.Tk):
     def _set_status(self, msg, color):
         self.after(0, lambda: self.status_dot.config(text=msg, fg=color))
 
-    # ── Acciones ──────────────────────────────────────────────────────────────
+    #    Acciones 
 
     def _translate(self):
         if not self._model_ready:
@@ -246,7 +246,7 @@ class TranslatorApp(tk.Tk):
         self.char_label.config(text=f"{n} carácter{'es' if n != 1 else ''}")
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+#    Entry point 
 
 if __name__ == "__main__":
     app = TranslatorApp()
