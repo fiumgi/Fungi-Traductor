@@ -1,3 +1,4 @@
+HEAD
 # Traductor ingles → español, usando Argos Translate
 # Requiere: pip install argostranslate
 
@@ -280,3 +281,28 @@ class TranslatorApp(tk.Tk):
 if __name__ == "__main__":
     app = TranslatorApp()
     app.mainloop()
+
+"""
+app.py — Punto de entrada de Fungi Traductor.
+
+Uso:
+    python app.py
+
+Requiere:
+    pip install -r requirements.txt
+"""
+from view       import TranslatorView
+from model      import TranslatorModel
+from controller import TranslatorController
+
+
+def main():
+    view       = TranslatorView()
+    model      = TranslatorModel()
+    _ctrl      = TranslatorController(view, model)  # conecta todo
+    view.mainloop()
+
+
+if __name__ == "__main__":
+    main()
+ccedc91 (refactor: reorganiza proyecto y agrega soporte pipx y build exe)

@@ -1,0 +1,24 @@
+[build-system]
+requires      = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name        = "fungi-traductor"
+version     = "2.0.0"
+description = "Traductor offline EN↔ES (y más idiomas) con interfaz gráfica"
+readme      = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "argostranslate>=1.9.0",
+    "langdetect>=1.0.9",
+    "pyttsx3>=2.90",
+]
+
+[project.scripts]
+# Permite ejecutar con:  pipx run fungi-traductor
+#                  o:    fungi-traductor   (tras pipx install)
+fungi-traductor = "app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
