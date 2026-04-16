@@ -11,6 +11,31 @@ class TranslatorController:
         self.view.btn_clear.config(command=self.clear)
         self.view.btn_copy.config(command=self.copy)
 
+    # ── INICIALIZACIÓN ─────────────────────────────────────────
+
+    def initialize(self):
+        def on_status(msg, level):
+            self.view.set_status(msg, level)
+
+        # Inicializar modelo (Argos packages)
+        self.model.init_packages(on_status)
+
+        # Poblar idiomas
+        self._populate_language_lists()
+
+    def _populate_language_lists(self):
+        pairs = self.model.available_pairs()
+
+        from_langs = {(src_code, src_name) for src_code, _, src_name, _ in pairs}
+        to_langs   = {(tgt_code, tgt_name) for _, tgt_code, _, tgt_name in pairs}
+
+        self.view.populate_from(sorted(from_langs))
+        self.view.populate_to(sorted(to_langs))
+
+        # valores por defecto
+        self.view.select_from("es")
+        self.view.select_to("en")
+
     # ── FUNCIONES ─────────────────────────────────────────────
 
     def translate(self):
@@ -35,7 +60,10 @@ class TranslatorController:
             return
 
         try:
-            lang = self.model.detect_language(text)
+            lang = self.model.detect(text)
+            if not lang:
+                self.view.set_status("● no se pudo detectar el idioma", "warn")
+                return
             self.view.select_from(lang)
             self.view.set_status(f"● detectado: {lang}", "info")
         except Exception as e:
@@ -48,7 +76,7 @@ class TranslatorController:
             return
 
         try:
-            self.model.text_to_speech(text)
+            self.model.speak(text)
         except Exception as e:
             self.view.set_status(f"● error TTS: {e}", "error")
 
@@ -76,6 +104,7 @@ class TranslatorController:
 
     def copy(self):
         text = self.view.get_output()
+
         if not text:
             return
 
