@@ -94,3 +94,13 @@ build_exe.bat
 
 - No subir `dist/`, `build/`, `__pycache__/`
 - Requiere Python 3.10+
+## problemas en linux
+Tkinter: Como recordarás, tkinter es parte de la librería estándar de Python. En Windows viene instalado por defecto, pero si algún usuario en Linux tiene problemas al ejecutarlo, deberá instalarlo desde su terminal (fuera de pip) con:
+
+# Ubuntu/Debian: 
+```sudo apt-get install python3-tk```
+
+# Fedora: 
+```sudo dnf install python3-tkinter```
+
+# Uso con el build: Al haber incluido estas librerías aquí, los scripts build_exe.bat y build_exe.sh que creamos antes las instalarán automáticamente antes de empezar la compilación.
