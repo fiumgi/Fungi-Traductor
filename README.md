@@ -40,7 +40,7 @@ Mostrar progreso más detallado durante descarga e instalación de paquetes.
 
 ## 🧱 Estructura del proyecto
 
-
+```
 Fungi-Traductor/
 │
 ├── fungi_traductor/
@@ -59,7 +59,7 @@ Fungi-Traductor/
 ├── build_exe.sh
 └── README.md
 
-
+```
 ---
 
 ## 📦 Instalar como app (pipx)
