@@ -2,7 +2,7 @@
 
 Traductor offline con interfaz gráfica construido con argostranslate + Tkinter.  
 Arquitectura MVC modular, redimensionable y multi-idioma.
-
+![interfaz](assets/main.png)
 ---
 ## 📚 Base del proyecto
 
