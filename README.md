@@ -1,4 +1,4 @@
-## 🍄 Fungi Traductor v2
+## 🍄 Fungi Traductor 
 
 Traductor offline con interfaz gráfica construido con argostranslate + Tkinter.  
 Arquitectura MVC modular, redimensionable y multi-idioma.
