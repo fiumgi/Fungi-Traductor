@@ -4,15 +4,10 @@ Traductor offline con interfaz gráfica construido con argostranslate + Tkinter.
 Arquitectura MVC modular, redimensionable y multi-idioma.
 
 ---
-## 🙏 Créditos
+## 📚 Base del proyecto
 
-Este proyecto está basado en:
+Este proyecto utiliza Argos Translate como motor principal de traducción offline.
 
-- Argos Translate (motor de traducción offline)
-- langdetect (detección de idioma)
-- pyttsx3 (text-to-speech)
-
-Todo el crédito de estas herramientas pertenece a sus respectivos autores.
 ---
 
 ## 🚀 Instalación rápida
@@ -114,3 +109,13 @@ Tkinter: Como recordarás, tkinter es parte de la librería estándar de Python.
 ```sudo dnf install python3-tkinter```
 
 ### Uso con el build: Al haber incluido estas librerías aquí, los scripts build_exe.bat y build_exe.sh que creamos antes las instalarán automáticamente antes de empezar la compilación.
+
+## 🙏 Créditos
+
+Este proyecto está basado en:
+
+### - Argos Translate (motor de traducción offline)
+### - langdetect (detección de idioma)
+### - pyttsx3 (text-to-speech)
+
+Todo el crédito de estas herramientas pertenece a sus respectivos autores.
