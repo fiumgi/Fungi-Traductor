@@ -114,10 +114,16 @@ Tkinter: Como recordarás, tkinter es parte de la librería estándar de Python.
 
 Este proyecto está basado en:
 
-### 📚 Librerías Utilizadas
-
 * [Argos Translate](https://github.com/argosopentech/argos-translate) - Motor de traducción offline basado en OpenNMT.
 * [langdetect](https://pypi.org/project/langdetect/) - Implementación en Python del detector de idiomas de Google.
 * [pyttsx3](https://pyttsx3.readthedocs.io/) - Librería de conversión de texto a voz compatible con múltiples motores.
 
 Todo el crédito de estas herramientas pertenece a sus respectivos autores.
+### 📄 Licencia
+Este proyecto es gratuito para uso personal y educativo.
+
+- ✔️ Uso, modificación y distribución permitidos  
+- ❌ Uso comercial no permitido  
+- ℹ️ Se debe dar crédito al autor original (fiumgi)  
+
+Ver el archivo [LICENSE](LICENSE) para más detalles.
