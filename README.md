@@ -81,8 +81,11 @@ chmod +x build_exe.sh
 
 ## 🔌 Dependencias opcionales
 
-pip install langdetect / detecta el idioma automaticamente 
-pip install pyttsx3 / sirve para la opcion de speak
+pip install langdetect .
+/ detecta el idioma automaticamente 
+
+pip install pyttsx3 .
+/ sirve para la opcion de speak
 
 ---
 
