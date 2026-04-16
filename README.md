@@ -32,7 +32,6 @@ Este proyecto utiliza Argos Translate como motor principal de traducción offlin
 | Auto-traducción | Botón ⚡ Auto (debounce) |
 | Detección | Usa langdetect |
 | TTS | Texto a voz con pyttsx3 |
-| Ajuste fuente | Ctrl + rueda |
 | Logging | fungi_traductor.log |
 | Responsive | UI redimensionable |
 Permitir elegir manualmente la voz desde la interfaz.
