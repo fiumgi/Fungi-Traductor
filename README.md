@@ -7,10 +7,13 @@ Arquitectura MVC modular, redimensionable y multi-idioma.
 
 ## 🚀 Instalación rápida
 
-git clone https://github.com/fiumgi/Fungi-Traductor
-cd Fungi-Traductor
-pip install -r requirements.txt
-python app.py
+git clone https://github.com/fiumgi/Fungi-Traductor.
+
+cd Fungi-Traductor.
+
+pip install -r requirements.txt.
+
+python app.py.
 
 ---
 
@@ -27,7 +30,8 @@ python app.py
 | Ajuste fuente | Ctrl + rueda |
 | Logging | fungi_traductor.log |
 | Responsive | UI redimensionable |
-
+Permitir elegir manualmente la voz desde la interfaz.
+Mostrar progreso más detallado durante descarga e instalación de paquetes.
 ---
 
 ## 🧱 Estructura del proyecto
@@ -56,10 +60,10 @@ Fungi-Traductor/
 
 ## 📦 Instalar como app (pipx)
 
-pipx install .
+pipx:
+pipx install git+https://github.com/fiumgi/Fungi-Traductor.git
 
 Luego ejecutar desde cualquier lugar:
-
 fungi-traductor
 
 ---
@@ -86,15 +90,3 @@ pip install pyttsx3 / sirve para la opcion de speak
 
 - No subir `dist/`, `build/`, `__pycache__/`
 - Requiere Python 3.10+
-<<<<<<< HEAD
-=======
-
----
-
-## 🔮 Mejoras futuras
-
-- Agregar más voces TTS por idioma, no solo la voz en español.
-- Mejorar la pronunciación en inglés usando una voz específica para `en`.
-- Permitir elegir manualmente la voz desde la interfaz.
-- Mostrar progreso más detallado durante descarga e instalación de paquetes.
->>>>>>> 8a3b1a8 (la app base esta completa)
