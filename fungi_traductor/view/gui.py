@@ -2,6 +2,11 @@
 view.py — Interfaz gráfica de Fungi Traductor.
 Solo widgets y helpers visuales; sin lógica de negocio.
 Patrón MVC · Fungi Traductor
+
+OPTIMIZACIONES:
+- Caché de estilos para evitar recrearlos
+- Actualización eficiente de UI
+- Bindings optimizados
 """
 import tkinter as tk
 from tkinter import ttk
@@ -40,31 +45,43 @@ class TranslatorView(tk.Tk):
         # Estado
         self._font_size = 12
         self.auto_enabled = False
+        
+        # Cache para evitar actualizaciones innecesarias
+        self._last_status = ""
+        self._last_status_level = ""
+        self._loading_active = False
 
         # Mapas idioma
         self._from_map: dict[str, str] = {}
         self._to_map:   dict[str, str] = {}
+        self._voice_map: dict[str, str | None] = {}
 
         # Estilo global (evita recrearlo muchas veces)
         self._init_styles()
 
         # Layout
-        for row, w in enumerate([0, 0, 0, 0, 1, 0]):
+        for row, w in enumerate([0, 0, 0, 0, 0, 1, 0]):
             self.rowconfigure(row, weight=w)
         self.columnconfigure(0, weight=1)
 
         self._build_header()
         self._build_sep(row=1)
         self._build_lang_bar()
-        self._build_sep(row=3)
+        self._build_progress_row()
+        self._build_sep(row=4)
         self._build_panels()
         self._build_bottom()
 
+        # Vincular eventos de teclado para mayor rapidez
+        self.bind('<Control-Return>', lambda e: self._trigger_translate())
+        self.bind('<Control-l>', lambda e: self.btn_clear.invoke())
+        
         self.after(100, self.input_text.focus_set)
 
-    # ── UI ───────────────────────────────────────────────────────────────
+    # ── UI ───────────────────────────────────────────────────────────
 
     def _init_styles(self):
+        """Inicializar estilos ttk una sola vez"""
         style = ttk.Style()
         style.configure(
             "TCombobox",
@@ -72,18 +89,35 @@ class TranslatorView(tk.Tk):
             foreground=TEXT,
             background=PANEL
         )
+        style.configure(
+            "Loading.Horizontal.TProgressbar",
+            troughcolor=PANEL,
+            background=ACCENT,
+            bordercolor=BORDER,
+            lightcolor=ACCENT,
+            darkcolor=ACCENT,
+        )
+
+    def _trigger_translate(self):
+        """Trigger para traducción vía teclado"""
+        if hasattr(self, 'btn_translate'):
+            self.btn_translate.invoke()
 
     def _build_header(self):
         f = tk.Frame(self, bg=BG, pady=16)
         f.grid(row=0, column=0, sticky="ew", padx=30)
         f.columnconfigure(0, weight=1)
+        f.columnconfigure(1, weight=0)
 
         tk.Label(f, text="🍄 Fungi Traductor",
                  font=FONT_TITLE, bg=BG, fg=TEXT).grid(row=0, column=0, sticky="w")
 
-        self.status_lbl = tk.Label(f, text="● iniciando…",
+        status_box = tk.Frame(f, bg=BG)
+        status_box.grid(row=0, column=1, sticky="e")
+
+        self.status_lbl = tk.Label(status_box, text="● iniciando…",
                                   font=FONT_SMALL, bg=BG, fg=SUBTEXT)
-        self.status_lbl.grid(row=0, column=1, sticky="e")
+        self.status_lbl.pack(anchor="e")
 
     def _build_sep(self, row: int):
         tk.Frame(self, bg=BORDER, height=1).grid(
@@ -123,9 +157,34 @@ class TranslatorView(tk.Tk):
                                     font=FONT_SMALL, padx=10, pady=4)
         self.btn_auto.pack(side="right", padx=4)
 
+    def _build_progress_row(self):
+        row = tk.Frame(self, bg=BG)
+        row.grid(row=3, column=0, sticky="ew", padx=30, pady=(0, 6))
+        row.columnconfigure(0, weight=1)
+        row.columnconfigure(1, weight=0)
+
+        self.progress_row = row
+        self.progress_track = ttk.Progressbar(
+            row,
+            mode="indeterminate",
+            style="Loading.Horizontal.TProgressbar",
+        )
+        self.progress_track.grid(row=0, column=0, sticky="ew")
+
+        self.progress_detail_lbl = tk.Label(
+            row,
+            text="",
+            font=FONT_SMALL,
+            bg=BG,
+            fg=SUBTEXT,
+            padx=12,
+        )
+        self.progress_detail_lbl.grid(row=0, column=1, sticky="e")
+        self.progress_row.grid_remove()
+
     def _build_panels(self):
         panels = tk.Frame(self, bg=BG)
-        panels.grid(row=4, column=0, sticky="nsew", padx=30, pady=(8, 4))
+        panels.grid(row=5, column=0, sticky="nsew", padx=30, pady=(8, 4))
 
         panels.columnconfigure(0, weight=1)
         panels.columnconfigure(1, weight=0)
@@ -169,7 +228,7 @@ class TranslatorView(tk.Tk):
 
     def _build_bottom(self):
         bottom = tk.Frame(self, bg=BG, pady=10)
-        bottom.grid(row=5, column=0, sticky="ew", padx=30)
+        bottom.grid(row=6, column=0, sticky="ew", padx=30)
 
         self.char_lbl = tk.Label(bottom, text="0 caracteres",
                                 font=FONT_LABEL, bg=BG, fg=SUBTEXT)
@@ -178,6 +237,13 @@ class TranslatorView(tk.Tk):
         self.detect_lbl = tk.Label(bottom, text="",
                                   font=FONT_SMALL, bg=BG, fg=WARN)
         self.detect_lbl.pack(side="left", padx=10)
+
+        tk.Label(bottom, text="Voz:", font=FONT_SMALL,
+                 bg=BG, fg=SUBTEXT).pack(side="left", padx=(12, 4))
+
+        self.voice_combo = ttk.Combobox(bottom, state="readonly", width=28,
+                                        font=FONT_SMALL)
+        self.voice_combo.pack(side="left")
 
         self.btn_clear = self._mk_btn(bottom, "Limpiar")
         self.btn_copy = self._mk_btn(bottom, "Copiar")
@@ -201,21 +267,69 @@ class TranslatorView(tk.Tk):
             padx=padx, pady=pady, cursor="hand2"
         )
 
-    # ── API CONTROLADOR ───────────────────────────────────────────────────
+    # ── API CONTROLADOR ───────────────────────────────────────────────
 
     def set_status(self, msg: str, level: str = "info"):
+        """Versión optimizada: solo actualiza si cambió"""
+        if msg == self._last_status and level == self._last_status_level:
+            return
+        
+        self._last_status = msg
+        self._last_status_level = level
         color = _STATUS_COLORS.get(level, SUBTEXT)
         self.status_lbl.config(text=msg, fg=color)
 
+    def set_loading(self, active: bool, mode: str = "indeterminate",
+                    value: float | None = None, detail: str = ""):
+        """Versión optimizada: evita cambios innecesarios"""
+        if active == self._loading_active:
+            # Solo actualizar detalles si está activo
+            if active:
+                self.progress_track.configure(mode=mode)
+                self.progress_detail_lbl.config(text=detail)
+                if mode != "indeterminate":
+                    progress_value = 0 if value is None else value
+                    self.progress_track.configure(value=progress_value, maximum=100)
+            return
+        
+        self._loading_active = active
+        self.progress_track.configure(mode=mode)
+        self.progress_detail_lbl.config(text=detail)
+
+        if active:
+            if not self.progress_row.winfo_ismapped():
+                self.progress_row.grid()
+            if mode == "indeterminate":
+                self.progress_track.start(10)
+            else:
+                progress_value = 0 if value is None else value
+                self.progress_track.stop()
+                self.progress_track.configure(value=progress_value, maximum=100)
+        else:
+            self.progress_track.stop()
+            self.progress_track.configure(value=0, maximum=100)
+            self.progress_detail_lbl.config(text="")
+            if self.progress_row.winfo_ismapped():
+                self.progress_row.grid_remove()
+
     def set_auto(self, enabled: bool):
-        self.auto_enabled = enabled
         if enabled:
             self.btn_auto.config(text="⚡ Auto: ON", fg=SUCCESS)
         else:
             self.btn_auto.config(text="⚡ Auto: OFF", fg=SUBTEXT)
+        self.auto_enabled = enabled
 
     def bind_auto_toggle(self, callback):
         self.btn_auto.config(command=callback)
+
+    def bind_from_change(self, callback):
+        self.from_combo.bind("<<ComboboxSelected>>", callback)
+
+    def bind_to_change(self, callback):
+        self.to_combo.bind("<<ComboboxSelected>>", callback)
+
+    def bind_voice_change(self, callback):
+        self.voice_combo.bind("<<ComboboxSelected>>", callback)
 
     def bind_input_change(self, callback):
         def wrapper(event):
@@ -241,12 +355,36 @@ class TranslatorView(tk.Tk):
         return self.output_text.get("1.0", "end-1c")
 
     def populate_from(self, items: list[tuple[str, str]]):
+        current = self.from_combo.get()
         self._from_map = {f"{name} ({code})": code for code, name in items}
-        self.from_combo["values"] = sorted(self._from_map)
+        values = sorted(self._from_map)
+        self.from_combo["values"] = values
+        if current in self._from_map:
+            self.from_combo.set(current)
+        else:
+            self.from_combo.set("")
 
     def populate_to(self, items: list[tuple[str, str]]):
+        current = self.to_combo.get()
         self._to_map = {f"{name} ({code})": code for code, name in items}
-        self.to_combo["values"] = sorted(self._to_map)
+        values = sorted(self._to_map)
+        self.to_combo["values"] = values
+        if current in self._to_map:
+            self.to_combo.set(current)
+        else:
+            self.to_combo.set("")
+
+    def populate_voices(self, items: list[tuple[str | None, str]]):
+        current = self.voice_combo.get()
+        values = [label for _, label in items]
+        self._voice_map = {label: voice_id for voice_id, label in items}
+        self.voice_combo["values"] = values
+        if current in self._voice_map:
+            self.voice_combo.set(current)
+        elif values:
+            self.voice_combo.set(values[0])
+        else:
+            self.voice_combo.set("")
 
     def select_from(self, code: str | None):
         if not code:
@@ -267,3 +405,11 @@ class TranslatorView(tk.Tk):
 
     def get_to_code(self) -> str:
         return self._to_map.get(self.to_combo.get(), "es")
+
+    def get_selected_voice_id(self) -> str | None:
+        return self._voice_map.get(self.voice_combo.get())
+
+    def select_voice(self, voice_id: str | None):
+        label = next((item for item, mapped_id in self._voice_map.items() if mapped_id == voice_id), None)
+        if label:
+            self.voice_combo.set(label)

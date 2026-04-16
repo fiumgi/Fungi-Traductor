@@ -3,6 +3,7 @@ model.py — Lógica de traducción, TTS y detección de idioma.
 Patrón MVC · Fungi Traductor
 """
 import logging
+import re
 import threading
 from pathlib import Path
 
@@ -16,6 +17,52 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+_SHORT_TEXT_EXACT_HINTS = {
+    "hello": "en",
+    "hello world": "en",
+    "hi": "en",
+    "hey": "en",
+    "thanks": "en",
+    "thank you": "en",
+    "good morning": "en",
+    "good afternoon": "en",
+    "good evening": "en",
+    "good night": "en",
+    "goodbye": "en",
+    "bye": "en",
+    "yes": "en",
+    "no": "en",
+}
+
+_SHORT_TEXT_WORD_HINTS = {
+    "en": {
+        "hello", "hi", "hey", "thanks", "thank", "you", "please", "good",
+        "morning", "afternoon", "evening", "night", "bye", "goodbye",
+        "yes", "no", "how", "are", "world",
+    },
+    "es": {
+        "hola", "gracias", "adios", "adiós", "buenos", "dias", "días",
+        "buenas", "tardes", "noches", "por", "favor", "si", "sí",
+    },
+    "it": {
+        "ciao", "grazie", "buongiorno", "buonasera", "arrivederci", "per",
+        "favore", "si",
+    },
+    "fr": {
+        "bonjour", "merci", "salut", "bonsoir", "au", "revoir", "s'il",
+        "plait", "plaît", "oui", "non",
+    },
+}
+
+_LANGUAGE_NAME_HINTS = {
+    "en": {"english", "inglés", "inges", "en-us", "en-gb"},
+    "es": {"spanish", "español", "espanol", "castilian"},
+    "fr": {"french", "français", "francais"},
+    "it": {"italian", "italiano"},
+    "de": {"german", "deutsch"},
+    "pt": {"portuguese", "português", "portugues"},
+}
+
 
 class TranslatorModel:
     """
@@ -28,10 +75,11 @@ class TranslatorModel:
         self._trans_mod = None   # argostranslate.translate
         self.ready      = False
         self._available: list = []   # paquetes disponibles en el índice
+        self._tts_voice_cache: list[dict] | None = None
 
     # ── Inicialización ────────────────────────────────────────────────────────
 
-    def init_packages(self, on_status) -> bool:
+    def init_packages(self, on_status, on_progress=None) -> bool:
         """
         Descarga el índice de paquetes de Argos Translate.
         on_status(msg: str, level: str)  level ∈ {"info","warn","error","ok"}
@@ -45,22 +93,31 @@ class TranslatorModel:
             on_status(msg, "error")
             return False
 
+        if on_progress:
+            on_progress("init", 10, "Cargando motor de traduccion…")
+
         self._pkg_mod   = pkg_mod
         self._trans_mod = trans_mod
 
         on_status("⟳ actualizando índice de paquetes…", "info")
+        if on_progress:
+            on_progress("init", 35, "Actualizando indice de paquetes…")
         try:
             pkg_mod.update_package_index()
         except Exception as exc:
             log.warning(f"Sin conexión o error de red: {exc}")
             on_status("⚠ sin conexión — usando paquetes locales", "warn")
 
+        if on_progress:
+            on_progress("init", 75, "Leyendo idiomas disponibles…")
         self._available = pkg_mod.get_available_packages()
         installed_count = len(pkg_mod.get_installed_packages())
         log.info(
             f"Índice cargado: {len(self._available)} disponibles, "
             f"{installed_count} instalados"
         )
+        if on_progress:
+            on_progress("init", 100, "Idiomas listos")
         return True
 
     def available_pairs(self) -> list[tuple]:
@@ -82,7 +139,7 @@ class TranslatorModel:
             result.append((p.from_code, p.to_code, fn, tn))
         return result
 
-    def ensure_pair(self, from_code: str, to_code: str, on_status) -> bool:
+    def ensure_pair(self, from_code: str, to_code: str, on_status, on_progress=None) -> bool:
         """Instala el par si no está instalado. Devuelve True si queda listo."""
         if not self._pkg_mod:
             return False
@@ -90,6 +147,8 @@ class TranslatorModel:
         installed = self._pkg_mod.get_installed_packages()
         if any(p.from_code == from_code and p.to_code == to_code
                for p in installed):
+            if on_progress:
+                on_progress("install", 100, f"Paquete {from_code}→{to_code} ya instalado")
             return True
 
         pkg = next(
@@ -104,9 +163,18 @@ class TranslatorModel:
             return False
 
         try:
+            if on_progress:
+                on_progress("install", 15, f"Preparando {from_code}→{to_code}…")
             on_status(f"⬇ instalando {from_code}→{to_code} (~50 MB), paciencia…", "info")
-            self._pkg_mod.install_from_path(pkg.download())
+            if on_progress:
+                on_progress("install", 40, f"Descargando paquete {from_code}→{to_code}…")
+            package_path = pkg.download()
+            if on_progress:
+                on_progress("install", 80, f"Instalando paquete {from_code}→{to_code}…")
+            self._pkg_mod.install_from_path(package_path)
             log.info(f"Instalado: {from_code}→{to_code}")
+            if on_progress:
+                on_progress("install", 100, f"Paquete {from_code}→{to_code} listo")
             return True
         except Exception as exc:
             msg = f"✗ error instalando paquete: {exc}"
@@ -131,8 +199,22 @@ class TranslatorModel:
         o None si langdetect no está instalado o falla.
         """
         try:
-            from langdetect import detect
-            code = detect(text)
+            from langdetect import DetectorFactory, detect_langs
+
+            DetectorFactory.seed = 0
+            normalized = self._normalize_text(text)
+            code = self._detect_short_text_language(normalized)
+            if code is None:
+                langs = detect_langs(text)
+                if not langs:
+                    return None
+
+                best = langs[0]
+                if self._is_detection_ambiguous(normalized, best.prob):
+                    log.info(f"Detección ambigua para texto corto: {langs}")
+                    return None
+                code = best.lang
+
             log.info(f"Idioma detectado: {code}")
             return code
         except ImportError:
@@ -142,29 +224,145 @@ class TranslatorModel:
             log.warning(f"langdetect falló: {exc}")
             return None
 
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        return re.sub(r"\s+", " ", text.strip().lower())
+
+    def _detect_short_text_language(self, normalized: str) -> str | None:
+        if not normalized:
+            return None
+
+        if normalized in _SHORT_TEXT_EXACT_HINTS:
+            return _SHORT_TEXT_EXACT_HINTS[normalized]
+
+        words = re.findall(r"[a-zA-ZÀ-ÿ']+", normalized)
+        if not words:
+            return None
+
+        if len(normalized) > 24 and len(words) > 3:
+            return None
+
+        best_lang = None
+        best_score = 0
+        for lang, hints in _SHORT_TEXT_WORD_HINTS.items():
+            score = sum(1 for word in words if word in hints)
+            if score > best_score:
+                best_lang = lang
+                best_score = score
+
+        if best_score == len(words):
+            return best_lang
+        if best_score >= 2:
+            return best_lang
+        return None
+
+    @staticmethod
+    def _is_detection_ambiguous(normalized: str, probability: float) -> bool:
+        words = re.findall(r"[a-zA-ZÀ-ÿ']+", normalized)
+        return len(normalized) <= 24 and len(words) <= 3 and probability < 0.90
+
     # ── TTS ───────────────────────────────────────────────────────────────────
 
-    def speak(self, text: str, lang: str = "es"):
+    def list_voices(self, preferred_lang: str | None = None) -> list[tuple[str, str]]:
+        voices = self._load_tts_voices()
+        ranked = sorted(
+            voices,
+            key=lambda voice: (
+                -self._voice_score(voice, preferred_lang),
+                voice["name"].lower(),
+                voice["id"].lower(),
+            ),
+        )
+        return [(voice["id"], voice["label"]) for voice in ranked]
+
+    def speak(self, text: str, lang: str = "es", voice_id: str | None = None):
         """Reproduce el texto en voz alta en un hilo separado."""
         def _run():
             try:
                 import pyttsx3
                 engine = pyttsx3.init()
                 engine.setProperty("rate", 155)
-                # Intentar seleccionar una voz del idioma correcto
-                for v in engine.getProperty("voices"):
-                    v_id   = v.id.lower()
-                    v_langs = [str(l).lower() for l in (v.languages or [])]
-                    if lang.lower() in v_id or any(lang.lower() in l for l in v_langs):
-                        engine.setProperty("voice", v.id)
-                        break
+                chosen_voice_id = self._choose_voice_id(lang, voice_id)
+                if chosen_voice_id:
+                    engine.setProperty("voice", chosen_voice_id)
                 engine.say(text)
                 engine.runAndWait()
                 engine.stop()
-                log.info(f"TTS: {len(text)} chars en idioma '{lang}'")
+                log.info(
+                    f"TTS: {len(text)} chars en idioma '{lang}' "
+                    f"con voz '{chosen_voice_id or 'automática'}'"
+                )
             except ImportError:
                 log.error("pyttsx3 no instalado — ejecuta: pip install pyttsx3")
             except Exception as exc:
                 log.error(f"Error en TTS: {exc}")
 
         threading.Thread(target=_run, daemon=True).start()
+
+    def _load_tts_voices(self) -> list[dict]:
+        # Reutilizar cache si ya está cargado
+        if self._tts_voice_cache is not None:
+            return self._tts_voice_cache
+
+        try:
+            import pyttsx3
+        except ImportError:
+            self._tts_voice_cache = []
+            return self._tts_voice_cache
+
+        try:
+            engine = pyttsx3.init()
+            voices = []
+            # Optimización: procesar voces una sola vez
+            for voice in engine.getProperty("voices"):
+                languages = [str(item).lower() for item in (getattr(voice, "languages", None) or [])]
+                name = getattr(voice, "name", voice.id)
+                label = f"{name} ({voice.id})"
+                voices.append({
+                    "id": voice.id,
+                    "name": name,
+                    "label": label,
+                    "languages": languages,
+                })
+            engine.stop()
+            # Ordenar una sola vez por rendimiento
+            self._tts_voice_cache = voices
+        except Exception as exc:
+            log.warning(f"No se pudieron cargar voces TTS: {exc}")
+            self._tts_voice_cache = []
+
+        return self._tts_voice_cache
+
+    def _choose_voice_id(self, lang: str, preferred_voice_id: str | None = None) -> str | None:
+        voices = self._load_tts_voices()
+        if not voices:
+            return None
+
+        if preferred_voice_id and any(voice["id"] == preferred_voice_id for voice in voices):
+            return preferred_voice_id
+
+        best_voice = max(voices, key=lambda voice: self._voice_score(voice, lang), default=None)
+        if not best_voice:
+            return None
+        return best_voice["id"]
+
+    def _voice_score(self, voice: dict, lang: str | None) -> int:
+        if not lang:
+            return 0
+
+        lang = lang.lower()
+        score = 0
+        voice_id = voice["id"].lower()
+        voice_name = voice["name"].lower()
+        voice_langs = voice["languages"]
+        hints = _LANGUAGE_NAME_HINTS.get(lang, {lang})
+
+        if any(lang in item for item in voice_langs):
+            score += 120
+        if any(hint in voice_id for hint in hints):
+            score += 80
+        if any(hint in voice_name for hint in hints):
+            score += 70
+        if lang == "en" and ("zira" in voice_name or "david" in voice_name or "english" in voice_name):
+            score += 40
+        return score

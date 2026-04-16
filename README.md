@@ -86,3 +86,15 @@ pip install pyttsx3 / sirve para la opcion de speak
 
 - No subir `dist/`, `build/`, `__pycache__/`
 - Requiere Python 3.10+
+<<<<<<< HEAD
+=======
+
+---
+
+## 🔮 Mejoras futuras
+
+- Agregar más voces TTS por idioma, no solo la voz en español.
+- Mejorar la pronunciación en inglés usando una voz específica para `en`.
+- Permitir elegir manualmente la voz desde la interfaz.
+- Mostrar progreso más detallado durante descarga e instalación de paquetes.
+>>>>>>> 8a3b1a8 (la app base esta completa)
