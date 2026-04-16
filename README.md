@@ -4,6 +4,16 @@ Traductor offline con interfaz gráfica construido con argostranslate + Tkinter.
 Arquitectura MVC modular, redimensionable y multi-idioma.
 
 ---
+## 🙏 Créditos
+
+Este proyecto está basado en:
+
+- Argos Translate (motor de traducción offline)
+- langdetect (detección de idioma)
+- pyttsx3 (text-to-speech)
+
+Todo el crédito de estas herramientas pertenece a sus respectivos autores.
+---
 
 ## 🚀 Instalación rápida
 
