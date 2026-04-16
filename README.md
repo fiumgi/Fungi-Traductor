@@ -7,13 +7,13 @@ Arquitectura MVC modular, redimensionable y multi-idioma.
 
 ## 🚀 Instalación rápida
 
-git clone https://github.com/fiumgi/Fungi-Traductor.
+```git clone https://github.com/fiumgi/Fungi-Traductor```
 
-cd Fungi-Traductor.
+```cd Fungi-Traductor```
 
-pip install -r requirements.txt.
+```pip install -r requirements.txt.```
 
-python app.py.
+```python app.py.```
 
 ---
 
@@ -61,10 +61,10 @@ Fungi-Traductor/
 ## 📦 Instalar como app (pipx)
 
 pipx:
-pipx install git+https://github.com/fiumgi/Fungi-Traductor.git
+```pipx install git+https://github.com/fiumgi/Fungi-Traductor.git```
 
 Luego ejecutar desde cualquier lugar:
-fungi-traductor
+```fungi-traductor```
 
 ---
 
@@ -74,17 +74,18 @@ fungi-traductor
 build_exe.bat
 
 ### Linux / macOS
-chmod +x build_exe.sh
-./build_exe.sh
+```chmod +x build_exe.sh```
+
+```./build_exe.sh```
 
 ---
 
 ## 🔌 Dependencias opcionales
 
-pip install langdetect .
+```pip install langdetect``` 
 / detecta el idioma automaticamente 
 
-pip install pyttsx3 .
+```pip install pyttsx3 ```
 / sirve para la opcion de speak
 
 ---
