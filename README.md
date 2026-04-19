@@ -92,12 +92,31 @@ Fungi-Traductor/
 ## ⚠️ Requisitos y Solución de Problemas
 
 - **Python**: Versión 3.10 o superior.
-- **Tesseract OCR**: Para la función de imágenes, necesitas instalar Tesseract en tu sistema:
-  - **Linux**: `sudo apt install tesseract-ocr` (y paquetes adicionales como `tesseract-ocr-spa` para español).
-  - **Windows**: Descarga el instalador de [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) (asegúrate de marcar los idiomas deseados durante la instalación).
-- **Linux (UI/Voz)**: Si encuentras errores de interfaz o de voz, instala:
-  - `sudo apt install python3-tk` (Interfaz gráfica)
-  - `sudo apt install espeak` (Motor de voz)
+
+Para que todas las funciones (OCR, documentos y voz) operen correctamente, es necesario instalar algunas dependencias a nivel de sistema que no pueden incluirse en el `requirements.txt`:
+
+### 1. Tesseract OCR (Para traducción de imágenes)
+La librería `pytesseract` es solo un conector; necesitas el motor oficial en tu sistema:
+
+- **Debian / Ubuntu / Mint / Kali**:
+  ```bash
+  sudo apt update
+  sudo apt install tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng
+  ```
+- **Arch Linux / Manjaro**:
+  ```bash
+  sudo pacman -S tesseract tesseract-data-spa tesseract-data-eng
+  ```
+- **Fedora**:
+  ```bash
+  sudo dnf install tesseract tesseract-langpack-spa tesseract-langpack-eng
+  ```
+- **Windows**: Descarga el instalador de [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) y asegúrate de marcar los idiomas deseados (Spanish, etc.) durante la instalación.
+
+### 2. Otras dependencias (Linux)
+Si experimentas errores con la interfaz gráfica o la voz:
+- **Tkinter**: `sudo apt install python3-tk`
+- **Voz (TTS)**: `sudo apt install espeak` o `libespeak1`
 
 ---
 
