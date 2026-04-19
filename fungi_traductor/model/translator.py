@@ -59,6 +59,18 @@ class TranslatorModel:
         self._tts_lock = threading.Lock()
         self._translation_cache = {}  # {(text, from, to): result}
 
+    def _check_system_proxy(self):
+        """Detecta si hay un proxy configurado en el sistema"""
+        try:
+            import urllib.request
+            proxies = urllib.request.getproxies()
+            if proxies:
+                # Retorna una cadena simple si hay proxies (http, https, etc)
+                return ", ".join(proxies.keys())
+        except Exception:
+            pass
+        return None
+
     # ── Inicialización ────────────────────────────────────────────────────────
 
     def init_packages(self, on_status, on_progress=None) -> bool:
@@ -87,8 +99,12 @@ class TranslatorModel:
         try:
             pkg_mod.update_package_index()
         except Exception as exc:
+            proxy = self._check_system_proxy()
             log.warning(f"Sin conexión o error de red: {exc}")
-            on_status("⚠ sin conexión — usando paquetes locales", "warn")
+            msg = "⚠ sin conexión — usando paquetes locales"
+            if proxy:
+                msg += " (detectado proxy corporativo)"
+            on_status(msg, "warn")
 
         if on_progress:
             on_progress("init", 75, "Leyendo idiomas disponibles…")
@@ -167,7 +183,10 @@ class TranslatorModel:
                 on_progress("install", 100, f"Paquete {from_code}→{to_code} listo")
             return True
         except Exception as exc:
+            proxy = self._check_system_proxy()
             msg = f"✗ error instalando paquete: {exc}"
+            if proxy:
+                msg += f" (revisa el proxy corporativo: {proxy})"
             log.error(msg)
             on_status(msg, "error")
             return False

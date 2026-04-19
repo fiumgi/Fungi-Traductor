@@ -2,9 +2,19 @@ import threading
 from queue import Empty, Queue
 from threading import Lock
 from collections import defaultdict
+import json
+from pathlib import Path
 
 
 class TranslatorController:
+    # Mapeo de códigos Argos (ISO 639-1) a Tesseract (ISO 639-2/específicos)
+    _TESS_LANG_MAP = {
+        "en": "eng", "es": "spa", "fr": "fra", "de": "deu",
+        "it": "ita", "pt": "por", "ru": "rus", "zh": "chi_sim",
+        "ja": "jpn", "ko": "kor", "ar": "ara", "hi": "hin",
+        "tr": "tur", "nl": "nld", "pl": "pol", "uk": "ukr"
+    }
+
     def __init__(self, view, model):
         self.view = view
         self.model = model
@@ -455,10 +465,18 @@ class TranslatorController:
         try:
             ext = path.lower()
             if ext.endswith(".pdf"):
-                self._set_status("● extrayendo texto de PDF…", "info")
+                self._set_status("● extrayendo texto de PDF (preservando layout)…", "info")
                 import fitz  # PyMuPDF
                 doc = fitz.open(path)
-                content = "".join([page.get_text() for page in doc])
+                content_parts = []
+                for page in doc:
+                    # Extraer bloques de texto ordenados por posición de lectura
+                    blocks = page.get_text("blocks", sort=True)
+                    for b in blocks:
+                        text = b[4].strip()
+                        if text:
+                            content_parts.append(text)
+                content = "\n\n".join(content_parts)
                 doc.close()
             elif ext.endswith(".docx"):
                 self._set_status("● extrayendo texto de Word…", "info")
@@ -476,7 +494,13 @@ class TranslatorController:
                     import pytesseract
                     from PIL import Image
                     img = Image.open(path)
-                    content = pytesseract.image_to_string(img).strip()
+                    
+                    # Detectar idioma origen para mejorar precisión del OCR
+                    src_code = self.view.get_from_code()
+                    tess_lang = self._TESS_LANG_MAP.get(src_code, "eng")
+                    
+                    self._set_status(f"● OCR en progreso ({tess_lang})…", "info")
+                    content = pytesseract.image_to_string(img, lang=tess_lang).strip()
                     if not content:
                         self._set_status("✗ no se detectó texto en la imagen", "warn")
                         return

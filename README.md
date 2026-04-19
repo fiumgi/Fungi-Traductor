@@ -92,8 +92,8 @@ Fungi-Traductor/
 
 - **Python**: Versión 3.10 o superior.
 - **Tesseract OCR**: Para la función de imágenes, necesitas instalar Tesseract en tu sistema:
-  - **Linux**: `sudo apt install tesseract-ocr`
-  - **Windows**: Descarga el instalador de [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki).
+  - **Linux**: `sudo apt install tesseract-ocr` (y paquetes adicionales como `tesseract-ocr-spa` para español).
+  - **Windows**: Descarga el instalador de [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) (asegúrate de marcar los idiomas deseados durante la instalación).
 - **Linux (UI/Voz)**: Si encuentras errores de interfaz o de voz, instala:
   - `sudo apt install python3-tk` (Interfaz gráfica)
   - `sudo apt install espeak` (Motor de voz)
