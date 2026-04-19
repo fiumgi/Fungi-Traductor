@@ -12,6 +12,7 @@ import os
 import sys
 import tkinter as tk
 from tkinter import ttk
+from typing import Literal
 
 
 def resource_path(relative_path):
@@ -55,6 +56,41 @@ FONT_SMALL = ("Georgia", 9)
 _STATUS_COLORS = {"info": SUBTEXT, "ok": SUCCESS, "warn": WARN, "error": ERR}
 
 
+class ToolTip:
+    """Implementación de tooltips nativos para Tkinter"""
+
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip_window = None
+        self.widget.bind("<Enter>", self._on_enter)
+        self.widget.bind("<Leave>", self._on_leave)
+
+    def _on_enter(self, _event=None):
+        if self.tip_window or not self.text:
+            return
+        x, y, _, _ = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 25
+
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+
+        label = tk.Label(
+            tw, text=self.text, justify='left',
+            background=PANEL, foreground=TEXT, relief='solid', borderwidth=1,
+            padx=8, pady=4, font=FONT_SMALL
+        )
+        label.pack()
+
+    def _on_leave(self, _event=None):
+        tw = self.tip_window
+        self.tip_window = None
+        if tw:
+            tw.destroy()
+
+
 class TranslatorView(tk.Tk):
 
     def __init__(self):
@@ -79,13 +115,15 @@ class TranslatorView(tk.Tk):
             pass
 
         # Estado
-        self._font_size = 12
-        self.auto_enabled = False
+        self._font_size: int = 12
+        self.auto_enabled: bool = False
+        self._input_placeholder_active: bool = True
+        self._output_placeholder_active: bool = True
 
         # Cache para evitar actualizaciones innecesarias
-        self._last_status = ""
-        self._last_status_level = ""
-        self._loading_active = False
+        self._last_status: str = ""
+        self._last_status_level: str = ""
+        self._loading_active: bool = False
 
         # Mapas idioma
         self._from_map: dict[str, str] = {}
@@ -301,22 +339,23 @@ class TranslatorView(tk.Tk):
         in_scroll.pack(side="right", fill="y")
         self.input_text.pack(side="left", expand=True, fill="both")
 
-        def on_focus_in(e):
-            if self.input_text.get(
-                "1.0",
-                    "end-1c") == "Escribe o pega texto aquí…" and self.input_text.cget("fg") == SUBTEXT:
+        def on_focus_in(e: tk.Event):
+            if self._input_placeholder_active:
                 self.input_text.delete("1.0", "end")
                 self.input_text.config(fg=TEXT)
+                self._input_placeholder_active = False
 
-        def on_focus_out(e):
+        def on_focus_out(e: tk.Event):
             if not self.input_text.get("1.0", "end-1c").strip():
                 self.input_text.insert("1.0", "Escribe o pega texto aquí…")
                 self.input_text.config(fg=SUBTEXT)
+                self._input_placeholder_active = True
 
         self.input_text.bind("<FocusIn>", on_focus_in)
         self.input_text.bind("<FocusOut>", on_focus_out)
         self.input_text.insert("1.0", "Escribe o pega texto aquí…")
         self.input_text.config(fg=SUBTEXT)
+        self._input_placeholder_active = True
 
         self.btn_swap_center = tk.Button(
             panels, text="⇄", font=("Georgia", 16, "bold"),
@@ -349,6 +388,7 @@ class TranslatorView(tk.Tk):
         self.output_text.config(state="normal")
         self.output_text.insert("1.0", "La traducción aparecerá aquí…")
         self.output_text.config(fg=SUBTEXT, state="disabled")
+        self._output_placeholder_active = True
 
     def _build_bottom(self):
         bottom = tk.Frame(self, bg=BG, pady=10)
@@ -429,7 +469,7 @@ class TranslatorView(tk.Tk):
         color = _STATUS_COLORS.get(level, SUBTEXT)
         self.status_lbl.config(text=msg, fg=color)
 
-    def set_loading(self, active: bool, mode: str = "indeterminate",
+    def set_loading(self, active: bool, mode: Literal["determinate", "indeterminate"] = "indeterminate",
                     value: float | None = None, detail: str = ""):
         """Versión optimizada: evita cambios innecesarios"""
         if active == self._loading_active:
@@ -499,13 +539,11 @@ class TranslatorView(tk.Tk):
         else:
             self.destroy()
 
-    def get_input(self):
+    def get_input(self) -> str:
         """Obtiene el texto del panel de entrada filtrando el placeholder."""
-        val = self.input_text.get("1.0", "end-1c")
-        if val == "Escribe o pega texto aquí…" and self.input_text.cget(
-                "fg") == SUBTEXT:
+        if self._input_placeholder_active:
             return ""
-        return val
+        return self.input_text.get("1.0", "end-1c")
 
     def set_input(self, text: str):
         """Establece el texto en el panel de entrada y maneja el placeholder."""
@@ -513,9 +551,11 @@ class TranslatorView(tk.Tk):
         if text:
             self.input_text.insert("1.0", text)
             self.input_text.config(fg=TEXT)
+            self._input_placeholder_active = False
         else:
             self.input_text.insert("1.0", "Escribe o pega texto aquí…")
             self.input_text.config(fg=SUBTEXT)
+            self._input_placeholder_active = True
 
     def set_output(self, text: str):
         """Establece la traducción en el panel de salida y gestiona botones contextuales."""
@@ -524,9 +564,11 @@ class TranslatorView(tk.Tk):
         if text:
             self.output_text.insert("1.0", text)
             self.output_text.config(fg=SUCCESS)
+            self._output_placeholder_active = False
         else:
             self.output_text.insert("1.0", "La traducción aparecerá aquí…")
             self.output_text.config(fg=SUBTEXT)
+            self._output_placeholder_active = True
         self.output_text.config(state="disabled")
 
         # Solo habilitar/deshabilitar copy y save; tts lo controla _toggle_ui
@@ -568,16 +610,22 @@ class TranslatorView(tk.Tk):
 
     def get_output(self) -> str:
         """Obtiene el texto del panel de salida filtrando el placeholder."""
-        val = self.output_text.get("1.0", "end-1c")
-        if val == "La traducción aparecerá aquí…" and self.output_text.cget(
-                "fg") == SUBTEXT:
+        if self._output_placeholder_active:
             return ""
-        return val
+        return self.output_text.get("1.0", "end-1c")
 
     def set_char_count(self, count: int):
         """Actualiza el contador de caracteres en la parte inferior"""
-        color = ERR if count > 4500 else WARN if count > 3000 else SUBTEXT
-        self.char_lbl.config(text=f"{count} / 5000", fg=color)
+        if count > 4500:
+            color = ERR
+            label = f"{count} / 5000 — cerca del límite"
+        elif count > 3000:
+            color = WARN
+            label = f"{count} / 5000 — traducción por párrafos"
+        else:
+            color = SUBTEXT
+            label = f"{count} / 5000"
+        self.char_lbl.config(text=label, fg=color)
 
     def populate_from(self, items: list[tuple[str, str]]):
         """Puebla el menú desplegable de idiomas de origen."""
@@ -652,3 +700,21 @@ class TranslatorView(tk.Tk):
             None)
         if label:
             self.voice_combo.set(label)
+
+    def set_tooltip(self, widget_name: str, text: str):
+        """Asigna un tooltip a un widget por su nombre de atributo."""
+        widget = getattr(self, widget_name, None)
+        if widget:
+            ToolTip(widget, text)
+
+    def set_button_enabled(self, button_name: str, enabled: bool):
+        """Habilita o deshabilita un botón por su nombre."""
+        btn = getattr(self, button_name, None)
+        if btn and isinstance(btn, tk.Button):
+            state = "normal" if enabled else "disabled"
+            btn.config(state=state)
+            if not enabled:
+                # Cambiar cursor si está deshabilitado para feedback visual claro
+                btn.config(cursor="arrow")
+            else:
+                btn.config(cursor="hand2")

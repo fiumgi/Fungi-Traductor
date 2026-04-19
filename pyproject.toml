@@ -15,6 +15,22 @@ dependencies = [
     "pyttsx3>=2.90",
 ]
 
+[project.optional-dependencies]
+docs = [
+    "pymupdf>=1.23.0",
+    "python-docx>=1.1.0",
+    "odfpy>=1.4.1",
+    "fpdf2>=2.7.0",
+]
+ocr = [
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0.0",
+]
+all = [
+    "fungi-traductor[docs,ocr]",
+    "platformdirs>=4.0.0",
+]
+
 [project.scripts]
 fungi-traductor = "fungi_traductor.__main__:main"
 
@@ -27,3 +43,25 @@ include = ["fungi_traductor*"]
 
 [tool.setuptools.package-data]
 "fungi_traductor" = ["assets/*.png", "assets/*.ico"]
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = [
+    "argostranslate",
+    "argostranslate.package",
+    "argostranslate.translate",
+    "langdetect",
+    "pyttsx3",
+    "pyttsx3.drivers",
+    "fitz",
+    "odf",
+    "odf.opendocument",
+    "odf.text",
+    "pytesseract",
+]
+ignore_missing_imports = true

@@ -1,9 +1,14 @@
 import threading
+import logging
 from queue import Empty, Queue
 from threading import Lock
 from collections import defaultdict
 import json
 from pathlib import Path
+from contextlib import contextmanager
+from typing import Any, Literal
+
+logger = logging.getLogger(__name__)
 
 
 class TranslatorController:
@@ -20,11 +25,11 @@ class TranslatorController:
         self.model = model
         self._pairs_by_source = {}
         self._suspend_auto = False
-        self._ui_queue = Queue(maxsize=50)
+        self._ui_queue: Queue[tuple[Any, ...]] = Queue(maxsize=50)
         self._init_state = "idle"
 
         # Cache para evitar búsquedas repetidas
-        self._voice_cache = {}
+        self._voice_cache: list[tuple[str | None, str]] = []
         self._voice_cache_lang = None
         self._last_translate_text = ""
         self._translate_scheduled = False
@@ -32,7 +37,7 @@ class TranslatorController:
         self._current_translate_evt = None  # Evento para cancelar hilos antiguos
 
         # Lock para operaciones thread-safe
-        self._lock = Lock()
+        self._pairs_lock = Lock()
 
         # Conectar botones
         self.view.btn_translate.config(command=self.translate)
@@ -50,6 +55,15 @@ class TranslatorController:
         self.view.bind_voice_change(self._on_voice_change)
         self.view.bind_close(self.on_close)
 
+    @contextmanager
+    def _suspend_auto_translation(self):
+        """Context manager para suspender la traducción automática durante cambios en UI."""
+        self._suspend_auto = True
+        try:
+            yield
+        finally:
+            self._suspend_auto = False
+
     # ── INICIALIZACIÓN ─────────────────────────────────────────
 
     def _set_status(self, msg, level="info"):
@@ -61,10 +75,10 @@ class TranslatorController:
 
     def _set_loading(
             self,
-            active,
-            mode="indeterminate",
-            value=None,
-            detail=""):
+            active: bool,
+            mode: Literal["determinate", "indeterminate"] = "indeterminate",
+            value: float | None = None,
+            detail: str = ""):
         try:
             from queue import Full
             self._ui_queue.put_nowait(("loading", active, mode, value, detail))
@@ -83,6 +97,7 @@ class TranslatorController:
             value=5,
             detail="Preparando inicio…")
         self._set_status("● actualizando índice de paquetes…", "info")
+        self._load_config()
         self._schedule_ui_queue_poll()
         threading.Thread(target=self._initialize_async, daemon=True).start()
 
@@ -145,6 +160,15 @@ class TranslatorController:
                 elif kind == "toggle_ui":
                     _, enabled = task
                     self._toggle_ui(enabled)
+                elif kind == "set_output":
+                    _, result = task
+                    self.view.set_output(result)
+                elif kind == "select_from":
+                    _, lang = task
+                    self.view.select_from(lang)
+                elif kind == "refresh_targets":
+                    _, preferred = task
+                    self._refresh_targets(preferred_code=preferred)
         except Empty:
             pass
         finally:
@@ -163,30 +187,133 @@ class TranslatorController:
             self._apply_status("● listo", "ok")
 
         self._toggle_ui(True)
+        self._check_optional_deps()  # Volver a verificar tras habilitar UI
+
+    def _check_optional_deps(self):
+        """Verifica dependencias opcionales y deshabilita funciones si faltan."""
+        # 1. Verificar TTS (pyttsx3)
+        try:
+            import pyttsx3
+        except ImportError:
+            self.view.set_button_enabled("btn_tts", False)
+            self.view.set_tooltip("btn_tts", "Falta pyttsx3: pip install pyttsx3")
+            logger.warning("TTS deshabilitado: pyttsx3 no instalado")
+
+        # 2. Verificar Detección (langdetect)
+        try:
+            import langdetect
+        except ImportError:
+            self.view.set_button_enabled("btn_detect", False)
+            self.view.set_tooltip("btn_detect", "Falta langdetect: pip install langdetect")
+            logger.warning("Detección deshabilitada: langdetect no instalado")
+
+        # 3. Verificar formatos de archivo (solo log y tooltips preventivos)
+        missing_formats = []
+        try:
+            import fitz
+        except ImportError:
+            missing_formats.append("PDF")
+        try:
+            import docx
+        except ImportError:
+            missing_formats.append("Word (.docx)")
+        try:
+            import odf
+        except ImportError:
+            missing_formats.append("ODT")
+        try:
+            import pytesseract
+            import PIL
+        except ImportError:
+            missing_formats.append("Imágenes (OCR)")
+
+        if missing_formats:
+            msg = f"Soporte limitado. Faltan: {', '.join(missing_formats)}"
+            self.view.set_tooltip("btn_open", msg)
+            logger.info(f"Soporte de archivos limitado: faltan {missing_formats}")
+
+    def _get_config_path(self) -> Path:
+        """Determina la ruta del archivo de configuración usando platformdirs."""
+        try:
+            from platformdirs import user_config_dir
+            config_dir = Path(user_config_dir("FungiTraductor", "fiumgi"))
+            config_dir.mkdir(parents=True, exist_ok=True)
+            return config_dir / "config.json"
+        except Exception:
+            # Fallback al directorio del paquete si falla platformdirs
+            return Path(__file__).parent.parent / "config.json"
+
+    def _load_config(self):
+        """Carga la configuración persistente (idiomas, auto-traducción, geometría)."""
+        path = self._get_config_path()
+        if not path.exists():
+            return
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+
+            # Restaurar par de idiomas si están disponibles
+            if "last_from" in config:
+                self.view.select_from(config["last_from"])
+                # Disparar actualización de destinos
+                self._refresh_targets(preferred_code=config.get("last_to"))
+
+            # Restaurar auto-traducción
+            if config.get("auto_enabled"):
+                self.view.set_auto(True)
+
+            # Restaurar geometría de ventana
+            if "geometry" in config:
+                self.view.geometry(config["geometry"])
+
+            logger.info(f"Configuración cargada desde {path}")
+        except Exception as e:
+            logger.error(f"Error al cargar configuración: {e}")
+
+    def _save_config(self):
+        """Guarda la configuración actual."""
+        path = self._get_config_path()
+        try:
+            config = {
+                "last_from": self.view.get_from_code(),
+                "last_to": self.view.get_to_code(),
+                "auto_enabled": self.view.auto_enabled,
+                "geometry": self.view.geometry()
+            }
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
+            logger.info(f"Configuración guardada en {path}")
+        except Exception as e:
+            logger.error(f"Error al guardar configuración: {e}")
 
     def _populate_language_lists(self):
         """Versión optimizada con mejor gestión de memoria"""
         pairs = self.model.available_pairs()
         from_langs = {}
-        pairs_by_source = defaultdict(dict)  # Más eficiente que setdefault
+        pairs_by_source: dict[str, dict[str, str]] = defaultdict(dict)  # Más eficiente que setdefault
 
         for src_code, tgt_code, src_name, tgt_name in pairs:
             from_langs[src_code] = src_name
             pairs_by_source[src_code][tgt_code] = tgt_name
 
         # Cache directo sin lambda innecesarios
-        self._pairs_by_source = {}
+        new_pairs = {}
         for src_code, targets in pairs_by_source.items():
-            self._pairs_by_source[src_code] = sorted(
+            new_pairs[src_code] = sorted(
                 targets.items(),
                 key=lambda item: (item[1].lower(), item[0])
             )
+
+        with self._pairs_lock:
+            self._pairs_by_source = new_pairs
 
         from_items = sorted(
             from_langs.items(),
             key=lambda item: (
                 item[1].lower(),
                 item[0]))
+        
         self.view.populate_from(from_items)
 
         if not from_items:
@@ -201,7 +328,8 @@ class TranslatorController:
 
     def _refresh_targets(self, preferred_code=None):
         src = self.view.get_from_code()
-        targets = self._pairs_by_source.get(src, [])
+        with self._pairs_lock:
+            targets = self._pairs_by_source.get(src, [])
 
         self.view.populate_to(targets)
         if not targets:
@@ -230,7 +358,7 @@ class TranslatorController:
         # Cache de voces para evitar recargarlas si el idioma no cambió
         if self._voice_cache_lang != lang_code:
             self._voice_cache_lang = lang_code
-            voice_items = [(None, "Automática")]
+            voice_items: list[tuple[str | None, str]] = [(None, "Automática")]
             voice_items.extend(self.model.list_voices(lang_code))
             self._voice_cache = voice_items
 
@@ -357,11 +485,12 @@ class TranslatorController:
             if cancel_evt.is_set():
                 return
 
-            valid_targets = {
-                code for code,
-                _ in self._pairs_by_source.get(
-                    src,
-                    [])}
+            with self._pairs_lock:
+                valid_targets = {
+                    code for code,
+                    _ in self._pairs_by_source.get(
+                        src,
+                        [])}
             if tgt not in valid_targets:
                 self._set_status(
                     "● combinación de idiomas no disponible", "warn")
@@ -386,11 +515,12 @@ class TranslatorController:
                     mode="determinate",
                     value=90,
                     detail="Traduciendo texto…")
-                result = self.model.translate(text, src, tgt)
+                result = self.model.translate(
+                    text, src, tgt, on_progress=self._on_install_progress)
 
                 if cancel_evt.is_set():
                     return
-                self.view.set_output(result)
+                self._ui_queue.put_nowait(("set_output", result))
                 self._set_status("● traducción lista", "ok")
             finally:
                 self._set_loading(False)
@@ -402,7 +532,10 @@ class TranslatorController:
         except Exception as e:
             self._set_loading(False)
             self._set_status(f"● error: {e}", "error")
-            self._ui_queue.put(("toggle_ui", True))
+            try:
+                self._ui_queue.put_nowait(("toggle_ui", True))
+            except Exception:
+                pass
 
     def _toggle_ui(self, enabled: bool):
         """Habilita o deshabilita los controles principales de la interfaz"""
@@ -420,36 +553,44 @@ class TranslatorController:
 
     def _detect_language_async(self):
         """Detección en hilo separado"""
-        self._toggle_ui(False)
-        threading.Thread(
-            target=self.detect_language,
-            daemon=True
-        ).start()
-
-    def detect_language(self):
-        """Detecta el idioma del texto ingresado y actualiza el origen."""
         text = self.view.get_input()
-
         if not text.strip():
             return
 
+        current_target = self.view.get_to_code()
+        self._toggle_ui(False)
+        threading.Thread(
+            target=self.detect_language,
+            args=(text, current_target),
+            daemon=True
+        ).start()
+
+    def detect_language(self, text: str, current_target: str):
+        """Detecta el idioma del texto ingresado y actualiza el origen."""
         try:
-            current_target = self.view.get_to_code()
             lang = self.model.detect(text)
             if not lang:
                 self._set_status("● no se pudo detectar el idioma", "warn")
                 return
 
-            if lang not in self._pairs_by_source:
+            with self._pairs_lock:
+                available = lang in self._pairs_by_source
+
+            if not available:
                 self._set_status(
                     f"● idioma detectado no disponible: {lang}", "warn")
                 return
 
-            self.view.select_from(lang)
-            self._refresh_targets(preferred_code=current_target)
+            try:
+                self._ui_queue.put_nowait(("select_from", lang))
+                self._ui_queue.put_nowait(("refresh_targets", current_target))
+            except Exception:
+                pass
             self._set_status(f"● detectado: {lang}", "info")
         except Exception as e:
             self._set_status(f"● error detección: {e}", "error")
+        finally:
+            self._ui_queue.put_nowait(("toggle_ui", True))
 
     def _text_to_speech_async(self):
         """TTS ya se ejecuta en hilo separado en el modelo, pero añadimos feedback"""
@@ -486,30 +627,27 @@ class TranslatorController:
             input_text = self.view.get_input()
             output_text = self.view.get_output()
 
-            self._suspend_auto = True
-            self.view.select_from(tgt)
-            self._voice_cache_lang = None  # Invalidar cache
-            self._refresh_targets(preferred_code=src)
+            with self._suspend_auto_translation():
+                self.view.select_from(tgt)
+                self._voice_cache_lang = None  # Invalidar cache
+                self._refresh_targets(preferred_code=src)
 
-            self.view.set_input(output_text)
-            self.view.set_output(input_text)
-            self.view.set_char_count(len(output_text))
-            self._suspend_auto = False
+                self.view.set_input(output_text)
+                self.view.set_output(input_text)
+                self.view.set_char_count(len(output_text))
 
             if self.view.auto_enabled and output_text.strip():
                 self._schedule_translate()
 
         except Exception as e:
-            self._suspend_auto = False
             self._set_status(f"● error swap: {e}", "error")
 
     def clear(self):
         """Limpia los paneles de entrada y salida."""
-        self._suspend_auto = True
-        self.view.set_input("")
-        self.view.set_output("")
-        self.view.set_char_count(0)
-        self._suspend_auto = False
+        with self._suspend_auto_translation():
+            self.view.set_input("")
+            self.view.set_output("")
+            self.view.set_char_count(0)
         self._set_status("● limpio", "info")
 
     def copy(self):
@@ -532,76 +670,96 @@ class TranslatorController:
             return
 
         try:
-            ext = path.lower()
-            if ext.endswith(".pdf"):
-                self._set_status(
-                    "● extrayendo texto de PDF (preservando layout)…", "info")
-                import fitz  # PyMuPDF
-                doc = fitz.open(path)
-                content_parts = []
-                for page in doc:
-                    # Extraer bloques de texto ordenados por posición de
-                    # lectura
-                    blocks = page.get_text("blocks", sort=True)
-                    for b in blocks:
-                        text = b[4].strip()
-                        if text:
-                            content_parts.append(text)
-                content = "\n\n".join(content_parts)
-                doc.close()
-            elif ext.endswith(".docx"):
-                self._set_status("● extrayendo texto de Word…", "info")
-                import docx
-                doc = docx.Document(path)
-                content = "\n".join([p.text for p in doc.paragraphs])
-            elif ext.endswith(".odt"):
-                self._set_status("● extrayendo texto de ODT…", "info")
-                from odf import opendocument, teletype
-                doc = opendocument.load(path)
-                content = teletype.extractText(doc)
-            elif ext.endswith((".png", ".jpg", ".jpeg")):
-                self._set_status("● extrayendo texto de imagen (OCR)…", "info")
-                try:
-                    import pytesseract
-                    from PIL import Image
-                    img = Image.open(path)
+            content = self._extract_text_from_file(path)
+            if content is None:  # Error manejado internamente
+                return
 
-                    # Detectar idioma origen para mejorar precisión del OCR
-                    src_code = self.view.get_from_code()
-                    tess_lang = self._TESS_LANG_MAP.get(src_code, "eng")
+            with self._suspend_auto_translation():
+                self.view.set_input(content)
+                self.view.set_char_count(len(content))
 
-                    self._set_status(
-                        f"● OCR en progreso ({tess_lang})…", "info")
-                    content = pytesseract.image_to_string(
-                        img, lang=tess_lang).strip()
-                    if not content:
-                        self._set_status(
-                            "✗ no se detectó texto en la imagen", "warn")
-                        return
-                except ImportError:
-                    self._set_status(
-                        "✗ faltan dependencias: pip install pytesseract Pillow", "error")
-                    return
-                except Exception as ex:
-                    self._set_status(
-                        "✗ error OCR: ¿está instalado tesseract-ocr en el sistema?", "error")
-                    return
-            else:
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-
-            self._suspend_auto = True
-            self.view.set_input(content)
-            self.view.set_char_count(len(content))
-            self._suspend_auto = False
-            self._set_status(
-                f"● archivo cargado: {
-                    len(content)} caracteres", "ok")
+            self._set_status(f"● archivo cargado: {len(content)} caracteres", "ok")
 
             if self.view.auto_enabled and content.strip():
                 self._schedule_translate()
         except Exception as e:
             self._set_status(f"✗ error al leer archivo: {e}", "error")
+            logger.error(f"Error al abrir archivo {path}: {e}")
+
+    def _extract_text_from_file(self, path: str) -> str | None:
+        """Extrae texto de un archivo según su extensión."""
+        ext = path.lower()
+        if ext.endswith(".pdf"):
+            return self._extract_pdf(path)
+        elif ext.endswith(".docx"):
+            return self._extract_docx(path)
+        elif ext.endswith(".odt"):
+            return self._extract_odt(path)
+        elif ext.endswith((".png", ".jpg", ".jpeg")):
+            return self._extract_image_ocr(path)
+        else:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                with open(path, "r", encoding="latin-1") as f:
+                    return f.read()
+
+    def _extract_pdf(self, path: str) -> str:
+        """Extrae texto de un archivo PDF."""
+        self._set_status("● extrayendo texto de PDF (preservando layout)…", "info")
+        import fitz  # PyMuPDF
+        doc = fitz.open(path)
+        content_parts = []
+        for page in doc:
+            blocks = page.get_text("blocks", sort=True)
+            for b in blocks:
+                text = b[4].strip()
+                if text:
+                    content_parts.append(text)
+        doc.close()
+        return "\n\n".join(content_parts)
+
+    def _extract_docx(self, path: str) -> str:
+        """Extrae texto de un archivo Word (.docx)."""
+        self._set_status("● extrayendo texto de Word…", "info")
+        import docx
+        doc = docx.Document(path)
+        return "\n".join([p.text for p in doc.paragraphs])
+
+    def _extract_odt(self, path: str) -> str:
+        """Extrae texto de un archivo OpenDocument (.odt)."""
+        self._set_status("● extrayendo texto de ODT…", "info")
+        from odf import opendocument, teletype
+        doc = opendocument.load(path)
+        return teletype.extractText(doc)
+
+    def _extract_image_ocr(self, path: str) -> str | None:
+        """Extrae texto de una imagen usando OCR."""
+        self._set_status("● extrayendo texto de imagen (OCR)…", "info")
+        try:
+            import pytesseract
+            from PIL import Image
+            img = Image.open(path)
+
+            # Detectar idioma origen para mejorar precisión del OCR
+            src_code = self.view.get_from_code()
+            tess_lang = self._TESS_LANG_MAP.get(src_code, "eng")
+
+            self._set_status(f"● OCR en progreso ({tess_lang})…", "info")
+            content = pytesseract.image_to_string(img, lang=tess_lang).strip()
+            
+            if not content:
+                self._set_status("✗ no se detectó texto en la imagen", "warn")
+                return ""
+            return content
+        except ImportError:
+            self._set_status("✗ faltan dependencias: pip install pytesseract Pillow", "error")
+            return None
+        except Exception as ex:
+            logger.error(f"Error OCR: {ex}")
+            self._set_status("✗ error OCR: ¿está instalado tesseract-ocr en el sistema?", "error")
+            return None
 
     def _on_save_file(self):
         """Guarda la traducción actual en un archivo .txt"""
@@ -621,10 +779,28 @@ class TranslatorController:
                 pdf = FPDF()
                 pdf.add_page()
                 pdf.set_font("Helvetica", size=12)
-                # Limpiar caracteres que fpdf con fuente estándar no soporta
-                clean_content = content.encode(
-                    'windows-1252', 'replace').decode('windows-1252')
-                pdf.multi_cell(0, 8, text=clean_content)
+                # Intentar registrar fuente Unicode si está disponible en el sistema
+                _unicode_font_paths = [
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+                    "C:/Windows/Fonts/arial.ttf",
+                ]
+                _unicode_font_loaded = False
+                for _font_path in _unicode_font_paths:
+                    import os as _os
+                    if _os.path.exists(_font_path):
+                        try:
+                            pdf.add_font("Unicode", fname=_font_path)
+                            pdf.set_font("Unicode", size=12)
+                            _unicode_font_loaded = True
+                        except Exception:
+                            pass
+                        break
+                if not _unicode_font_loaded:
+                    # Fallback: reemplazar caracteres no soportados con '?'
+                    content = content.encode(
+                        'windows-1252', 'replace').decode('windows-1252')
+                pdf.multi_cell(0, 8, text=content)
                 pdf.output(path)
             elif ext.endswith(".docx"):
                 import docx
@@ -655,6 +831,9 @@ class TranslatorController:
 
     def on_close(self):
         """Maneja el cierre de la ventana"""
+        # Guardar configuración antes de cerrar
+        self._save_config()
+
         # Cancelar cualquier traducción en curso
         if self._current_translate_evt:
             self._current_translate_evt.set()

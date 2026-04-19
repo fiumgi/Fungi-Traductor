@@ -38,6 +38,14 @@ _SHORT_TEXT_WORD_HINTS = {
         "bonjour", "merci", "salut", "bonsoir", "au", "revoir", "s'il",
         "plait", "plaît", "oui", "non",
     },
+    "de": {
+        "hallo", "guten", "morgen", "abend", "nacht", "danke", "bitte",
+        "tschüss", "tschuss", "ja", "nein", "auf", "wiedersehen",
+    },
+    "pt": {
+        "olá", "ola", "obrigado", "obrigada", "bom", "boa", "tarde",
+        "noite", "adeus", "tchau", "sim", "não", "nao", "por", "favor",
+    },
 }
 
 _LANGUAGE_NAME_HINTS = {

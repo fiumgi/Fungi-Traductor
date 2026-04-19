@@ -39,8 +39,17 @@ python -m PyInstaller ^
   --hidden-import pyttsx3 ^
   --hidden-import pyttsx3.drivers ^
   --hidden-import pyttsx3.drivers.sapi5 ^
+  --hidden-import fitz ^
+  --hidden-import docx ^
+  --hidden-import fpdf ^
+  --hidden-import odf ^
+  --hidden-import pytesseract ^
+  --hidden-import PIL ^
   --collect-all argostranslate ^
   --collect-all pyttsx3 ^
+  --collect-all fitz ^
+  --collect-all docx ^
+  --collect-all fpdf ^
   --add-data "fungi_traductor/assets;fungi_traductor/assets" ^
   --clean ^
   app.py

@@ -8,6 +8,7 @@ import threading
 import sys
 import os
 from pathlib import Path
+from collections import OrderedDict
 from .hints import _SHORT_TEXT_EXACT_HINTS, _SHORT_TEXT_WORD_HINTS, _LANGUAGE_NAME_HINTS
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -40,6 +41,9 @@ except Exception:
     )
 log = logging.getLogger(__name__)
 
+# Silenciar logs internos de argostranslate
+logging.getLogger("argostranslate").setLevel(logging.WARNING)
+
 
 
 
@@ -57,7 +61,8 @@ class TranslatorModel:
         self._available: list = []   # paquetes disponibles en el índice
         self._tts_voice_cache: list[dict] | None = None
         self._tts_lock = threading.Lock()
-        self._translation_cache = {}  # {(text, from, to): result}
+        self._cache_lock = threading.Lock()
+        self._translation_cache: OrderedDict[tuple[str, str, str], str] = OrderedDict()
 
     def _check_system_proxy(self):
         """Detecta si hay un proxy configurado en el sistema"""
@@ -193,24 +198,56 @@ class TranslatorModel:
 
     # ── Traducción ────────────────────────────────────────────────────────────
 
-    def translate(self, text: str, from_code: str, to_code: str) -> str:
-        if not self._trans_mod:
+    def translate(self, text: str, from_code: str, to_code: str, on_progress=None) -> str:
+        trans_mod = self._trans_mod
+        if not trans_mod:
             raise RuntimeError("Modelo no inicializado")
-        
-        cache_key = (text, from_code, to_code)
-        if cache_key in self._translation_cache:
-            log.info(f"Caché hit: {len(text)} chars {from_code}→{to_code}")
-            return self._translation_cache[cache_key]
 
-        result = self._trans_mod.translate(text, from_code, to_code)
+        def _get_cached_or_translate(txt):
+            key = (txt, from_code, to_code)
+            with self._cache_lock:
+                if key in self._translation_cache:
+                    self._translation_cache.move_to_end(key)
+                    return self._translation_cache[key]
+            
+            res = trans_mod.translate(txt, from_code, to_code)
+            # Límite adaptativo: textos largos consumen mucha más memoria
+            max_cache = 50 if len(txt) > 1000 else 200
+            with self._cache_lock:
+                self._translation_cache[key] = res
+                if len(self._translation_cache) > max_cache:
+                    self._translation_cache.popitem(last=False)
+            return res
+
+        # Intentar match exacto primero
+        cache_key = (text, from_code, to_code)
+        with self._cache_lock:
+            if cache_key in self._translation_cache:
+                log.info(f"Caché hit: {len(text)} chars {from_code}→{to_code}")
+                self._translation_cache.move_to_end(cache_key)
+                return self._translation_cache[cache_key]
+
+        # Chunking para textos largos (>3000 caracteres)
+        if len(text) > 3000:
+            paragraphs = [p for p in text.split('\n') if p.strip()]
+            if len(paragraphs) > 1:
+                results = []
+                total = len(paragraphs)
+                for i, p in enumerate(paragraphs):
+                    if on_progress:
+                        on_progress("translate", int((i / total) * 100), f"Traduciendo párrafo {i+1}/{total}…")
+                    results.append(_get_cached_or_translate(p))
+                result = "\n\n".join(results)
+            else:
+                result = _get_cached_or_translate(text)
+        else:
+            result = _get_cached_or_translate(text)
+
+        # Guardar también el texto completo en cache si no estaba
+        with self._cache_lock:
+            if cache_key not in self._translation_cache:
+                self._translation_cache[cache_key] = result
         
-        # Guardar en caché y limitar tamaño (p.ej. 100 entradas)
-        if len(self._translation_cache) >= 100:
-            # Eliminar la entrada más vieja (primera insertada)
-            oldest_key = next(iter(self._translation_cache))
-            del self._translation_cache[oldest_key]
-        
-        self._translation_cache[cache_key] = result
         log.info(f"Traducidos {len(text)} chars  {from_code}→{to_code} (Guardado en caché)")
         return result
 
