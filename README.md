@@ -1,4 +1,4 @@
-# 🍄 Fungi Traductor
+# Fungi Traductor
 
 ![Fungi Traductor Icon](fungi_traductor/assets/main.png)
 
