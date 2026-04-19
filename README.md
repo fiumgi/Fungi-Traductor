@@ -22,6 +22,7 @@ Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado p
 - **🎨 Interfaz Adaptativa**: Diseño oscuro (Dark Mode) con **High DPI Awareness** para máxima nitidez en todas las pantallas.
 - **🚀 Rendimiento Optimizado**:
   - **Cancelación en Vuelo**: Cancela hilos de traducción antiguos al seguir escribiendo para ahorrar CPU.
+- **⚙️ Configuración Inteligente**: El programa recuerda el par de idiomas, el modo auto y el tamaño de la ventana entre sesiones.
 
 ---
 
@@ -109,6 +110,7 @@ Este proyecto es posible gracias a la comunidad de código abierto:
 - [PyMuPDF](https://github.com/pymupdf/PyMuPDF)
 - [python-docx](https://github.com/python-openxml/python-docx)
 - [odfpy](https://github.com/eea/odfpy)
+- [fpdf2](https://github.com/PyFPDF/fpdf2)
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
 
 Desarrollado con Amor❤️ por **fiumgi**.

@@ -22,7 +22,7 @@ class TranslatorController:
         self._suspend_auto = False
         self._ui_queue = Queue(maxsize=50)
         self._init_state = "idle"
-        
+
         # Cache para evitar búsquedas repetidas
         self._voice_cache = {}
         self._voice_cache_lang = None
@@ -30,7 +30,7 @@ class TranslatorController:
         self._translate_scheduled = False
         self._translate_timer = None
         self._current_translate_evt = None  # Evento para cancelar hilos antiguos
-        
+
         # Lock para operaciones thread-safe
         self._lock = Lock()
 
@@ -38,7 +38,7 @@ class TranslatorController:
         self.view.btn_translate.config(command=self.translate)
         self.view.btn_detect.config(command=self._detect_language_async)
         self.view.btn_tts.config(command=self._text_to_speech_async)
-        self.view.btn_swap.config(command=self.swap_languages)
+        self.view.btn_swap_center.config(command=self.swap_languages)
         self.view.btn_clear.config(command=self.clear)
         self.view.btn_copy.config(command=self.copy)
         self.view.btn_open.config(command=self._on_open_file)
@@ -59,7 +59,12 @@ class TranslatorController:
         except Full:
             pass
 
-    def _set_loading(self, active, mode="indeterminate", value=None, detail=""):
+    def _set_loading(
+            self,
+            active,
+            mode="indeterminate",
+            value=None,
+            detail=""):
         try:
             from queue import Full
             self._ui_queue.put_nowait(("loading", active, mode, value, detail))
@@ -70,19 +75,27 @@ class TranslatorController:
         self.view.set_status(msg, level)
 
     def initialize(self):
+        """Inicia el proceso de carga de paquetes e interfaz en segundo plano."""
         self._init_state = "loading"
-        self._set_loading(True, mode="determinate", value=5, detail="Preparando inicio…")
+        self._set_loading(
+            True,
+            mode="determinate",
+            value=5,
+            detail="Preparando inicio…")
         self._set_status("● actualizando índice de paquetes…", "info")
         self._schedule_ui_queue_poll()
         threading.Thread(target=self._initialize_async, daemon=True).start()
 
     def _initialize_async(self):
         # Inicializar modelo (Argos packages)
-        if not self.model.init_packages(self._on_init_status, self._on_init_progress):
+        if not self.model.init_packages(
+                self._on_init_status,
+                self._on_init_progress):
             try:
                 from queue import Full
                 self._ui_queue.put_nowait(("init_done", False))
-            except Full: pass
+            except Full:
+                pass
             return
 
         # Poblar idiomas
@@ -90,8 +103,8 @@ class TranslatorController:
             from queue import Full
             self._ui_queue.put_nowait(("populate",))
             self._ui_queue.put_nowait(("init_done", True))
-        except Full: pass
-
+        except Full:
+            pass
 
     def _on_init_status(self, msg, level="info"):
         if level == "warn":
@@ -107,7 +120,8 @@ class TranslatorController:
         self._set_loading(True, mode="determinate", value=value, detail=detail)
 
     def _schedule_ui_queue_poll(self):
-        self.view.after(50, self._drain_ui_queue)  # 50ms en lugar de 100ms para más fluidez
+        # 50ms en lugar de 100ms para más fluidez
+        self.view.after(50, self._drain_ui_queue)
 
     def _drain_ui_queue(self):
         try:
@@ -121,7 +135,8 @@ class TranslatorController:
                     self._apply_status(msg, level)
                 elif kind == "loading":
                     _, active, mode, value, detail = task
-                    self.view.set_loading(active, mode=mode, value=value, detail=detail)
+                    self.view.set_loading(
+                        active, mode=mode, value=value, detail=detail)
                 elif kind == "populate":
                     self._populate_language_lists()
                 elif kind == "init_done":
@@ -141,11 +156,12 @@ class TranslatorController:
             return
 
         if self._init_state == "offline":
-            self._apply_status("⚠ sin conexión — usando paquetes locales", "warn")
+            self._apply_status(
+                "⚠ sin conexión — usando paquetes locales", "warn")
         elif self._init_state != "error":
             self._init_state = "ready"
             self._apply_status("● listo", "ok")
-        
+
         self._toggle_ui(True)
 
     def _populate_language_lists(self):
@@ -162,11 +178,15 @@ class TranslatorController:
         self._pairs_by_source = {}
         for src_code, targets in pairs_by_source.items():
             self._pairs_by_source[src_code] = sorted(
-                targets.items(), 
+                targets.items(),
                 key=lambda item: (item[1].lower(), item[0])
             )
-        
-        from_items = sorted(from_langs.items(), key=lambda item: (item[1].lower(), item[0]))
+
+        from_items = sorted(
+            from_langs.items(),
+            key=lambda item: (
+                item[1].lower(),
+                item[0]))
         self.view.populate_from(from_items)
 
         if not from_items:
@@ -185,7 +205,8 @@ class TranslatorController:
 
         self.view.populate_to(targets)
         if not targets:
-            self._set_status(f"● no hay destinos disponibles para {src}", "warn")
+            self._set_status(
+                f"● no hay destinos disponibles para {src}", "warn")
             return
 
         current_code = self.view.get_to_code()
@@ -200,20 +221,21 @@ class TranslatorController:
 
         self.view.select_to(selected_code)
         self._refresh_voices()
+        self._update_panel_headers()
 
     def _refresh_voices(self, preferred_voice_id=None):
         """Versión mejorada con caching de voces"""
         lang_code = self.view.get_to_code()
-        
+
         # Cache de voces para evitar recargarlas si el idioma no cambió
         if self._voice_cache_lang != lang_code:
             self._voice_cache_lang = lang_code
             voice_items = [(None, "Automática")]
             voice_items.extend(self.model.list_voices(lang_code))
             self._voice_cache = voice_items
-        
+
         self.view.populate_voices(self._voice_cache)
-        
+
         current_voice_id = self.view.get_selected_voice_id()
         if preferred_voice_id is not None:
             self.view.select_voice(preferred_voice_id)
@@ -221,6 +243,14 @@ class TranslatorController:
             self.view.select_voice(current_voice_id)
         else:
             self.view.select_voice(None)
+
+    def _update_panel_headers(self):
+        from_val = self.view.from_combo.get()
+        to_val = self.view.to_combo.get()
+        src_name = from_val.split(' (')[0] if from_val else "..."
+        tgt_name = to_val.split(' (')[0] if to_val else "..."
+        self.view.lbl_src.config(text=f"Texto original · {src_name}")
+        self.view.lbl_dst.config(text=f"Traducción · {tgt_name}")
 
     def _on_from_change(self, _event=None):
         previous_target = self.view.get_to_code()
@@ -231,6 +261,7 @@ class TranslatorController:
     def _on_to_change(self, _event=None):
         self._voice_cache_lang = None  # Invalidar cache de voces
         self._refresh_voices()
+        self._update_panel_headers()
         if self.view.auto_enabled and self.view.get_input().strip():
             self._schedule_translate()
 
@@ -250,7 +281,8 @@ class TranslatorController:
 
         if self.view.auto_enabled:
             if text.strip():
-                # Solo traducir si el texto cambió y no hay traducción pendiente
+                # Solo traducir si el texto cambió y no hay traducción
+                # pendiente
                 if text != self._last_translate_text:
                     self._schedule_translate()
             else:
@@ -261,7 +293,7 @@ class TranslatorController:
         """Debouncing: evita traducir en cada carácter"""
         if self._translate_timer is not None:
             self.view.after_cancel(self._translate_timer)
-        
+
         self._translate_timer = self.view.after(300, self._execute_translate)
 
     def _execute_translate(self):
@@ -270,9 +302,13 @@ class TranslatorController:
         self.translate()
 
     def toggle_auto(self):
+        """Alterna el modo de traducción automática."""
         enabled = not self.view.auto_enabled
         self.view.set_auto(enabled)
-        self._set_status(f"● auto {'activado' if enabled else 'desactivado'}", "info")
+        self._set_status(
+            f"● auto {
+                'activado' if enabled else 'desactivado'}",
+            "info")
 
         if enabled and self.view.get_input().strip():
             self._schedule_translate()
@@ -294,15 +330,16 @@ class TranslatorController:
             return
 
         if len(text) > 5000:
-            self._set_status("● texto largo: la traducción puede tardar", "warn")
+            self._set_status(
+                "● texto largo: la traducción puede tardar", "warn")
 
         self._toggle_ui(False)
         self._last_translate_text = text
-        
+
         # Cancelar traducción en curso si existe
         if self._current_translate_evt:
             self._current_translate_evt.set()
-        
+
         # Crear nuevo evento para esta traducción
         evt = threading.Event()
         self._current_translate_evt = evt
@@ -317,24 +354,42 @@ class TranslatorController:
     def _translate_async(self, text, src, tgt, cancel_evt):
         """Traducción asincrónica en segundo plano"""
         try:
-            if cancel_evt.is_set(): return
-
-            valid_targets = {code for code, _ in self._pairs_by_source.get(src, [])}
-            if tgt not in valid_targets:
-                self._set_status("● combinación de idiomas no disponible", "warn")
+            if cancel_evt.is_set():
                 return
 
-            self._set_loading(True, mode="determinate", value=10, detail="Validando paquete…")
+            valid_targets = {
+                code for code,
+                _ in self._pairs_by_source.get(
+                    src,
+                    [])}
+            if tgt not in valid_targets:
+                self._set_status(
+                    "● combinación de idiomas no disponible", "warn")
+                return
+
+            self._set_loading(
+                True,
+                mode="determinate",
+                value=10,
+                detail="Validando paquete…")
             try:
-                if cancel_evt.is_set(): return
-                if not self.model.ensure_pair(src, tgt, self._set_status, self._on_install_progress):
+                if cancel_evt.is_set():
                     return
-                
-                if cancel_evt.is_set(): return
-                self._set_loading(True, mode="determinate", value=90, detail="Traduciendo texto…")
+                if not self.model.ensure_pair(
+                        src, tgt, self._set_status, self._on_install_progress):
+                    return
+
+                if cancel_evt.is_set():
+                    return
+                self._set_loading(
+                    True,
+                    mode="determinate",
+                    value=90,
+                    detail="Traduciendo texto…")
                 result = self.model.translate(text, src, tgt)
-                
-                if cancel_evt.is_set(): return
+
+                if cancel_evt.is_set():
+                    return
                 self.view.set_output(result)
                 self._set_status("● traducción lista", "ok")
             finally:
@@ -354,9 +409,12 @@ class TranslatorController:
         state = "normal" if enabled else "disabled"
         self.view.btn_translate.config(state=state)
         self.view.btn_detect.config(state=state)
-        self.view.btn_swap.config(state=state)
+        self.view.btn_swap_center.config(state=state)
         self.view.btn_clear.config(state=state)
-        self.view.from_combo.config(state="readonly" if enabled else "disabled")
+        self.view.btn_open.config(state=state)
+        self.view.btn_tts.config(state=state)
+        self.view.from_combo.config(
+            state="readonly" if enabled else "disabled")
         self.view.to_combo.config(state="readonly" if enabled else "disabled")
         self.view.input_text.config(state=state)
 
@@ -369,6 +427,7 @@ class TranslatorController:
         ).start()
 
     def detect_language(self):
+        """Detecta el idioma del texto ingresado y actualiza el origen."""
         text = self.view.get_input()
 
         if not text.strip():
@@ -382,7 +441,8 @@ class TranslatorController:
                 return
 
             if lang not in self._pairs_by_source:
-                self._set_status(f"● idioma detectado no disponible: {lang}", "warn")
+                self._set_status(
+                    f"● idioma detectado no disponible: {lang}", "warn")
                 return
 
             self.view.select_from(lang)
@@ -396,7 +456,7 @@ class TranslatorController:
         text = self.view.get_output()
         if not text.strip():
             return
-        
+
         self._set_status("● reproduciendo audio…", "info")
         threading.Thread(
             target=self.text_to_speech,
@@ -404,6 +464,7 @@ class TranslatorController:
         ).start()
 
     def text_to_speech(self):
+        """Ejecuta la lectura por voz (TTS) del texto traducido."""
         text = self.view.get_output()
         lang = self.view.get_to_code()
         voice_id = self.view.get_selected_voice_id()
@@ -417,6 +478,7 @@ class TranslatorController:
             self._set_status(f"● error TTS: {e}", "error")
 
     def swap_languages(self):
+        """Intercambia el idioma de origen y destino, y sus textos correspondientes."""
         try:
             src = self.view.get_from_code()
             tgt = self.view.get_to_code()
@@ -442,6 +504,7 @@ class TranslatorController:
             self._set_status(f"● error swap: {e}", "error")
 
     def clear(self):
+        """Limpia los paneles de entrada y salida."""
         self._suspend_auto = True
         self.view.set_input("")
         self.view.set_output("")
@@ -450,10 +513,16 @@ class TranslatorController:
         self._set_status("● limpio", "info")
 
     def copy(self):
+        """Copia el texto traducido al portapapeles."""
         text = self.view.get_output()
         if text.strip():
             self.view.clipboard_clear()
             self.view.clipboard_append(text)
+            self.view.btn_copy.config(text="✓ Copiado", fg="#43e97b")
+            self.view.after(
+                1500,
+                lambda: self.view.btn_copy.config(
+                    text="Copiar", fg="#7a7f96"))
             self._set_status("● copiado al portapapeles", "ok")
 
     def _on_open_file(self):
@@ -461,16 +530,18 @@ class TranslatorController:
         path = self.view.ask_open_file()
         if not path:
             return
-        
+
         try:
             ext = path.lower()
             if ext.endswith(".pdf"):
-                self._set_status("● extrayendo texto de PDF (preservando layout)…", "info")
+                self._set_status(
+                    "● extrayendo texto de PDF (preservando layout)…", "info")
                 import fitz  # PyMuPDF
                 doc = fitz.open(path)
                 content_parts = []
                 for page in doc:
-                    # Extraer bloques de texto ordenados por posición de lectura
+                    # Extraer bloques de texto ordenados por posición de
+                    # lectura
                     blocks = page.get_text("blocks", sort=True)
                     for b in blocks:
                         text = b[4].strip()
@@ -487,39 +558,46 @@ class TranslatorController:
                 self._set_status("● extrayendo texto de ODT…", "info")
                 from odf import opendocument, teletype
                 doc = opendocument.load(path)
-                content = teletype.get_all_text(doc)
+                content = teletype.extractText(doc)
             elif ext.endswith((".png", ".jpg", ".jpeg")):
                 self._set_status("● extrayendo texto de imagen (OCR)…", "info")
                 try:
                     import pytesseract
                     from PIL import Image
                     img = Image.open(path)
-                    
+
                     # Detectar idioma origen para mejorar precisión del OCR
                     src_code = self.view.get_from_code()
                     tess_lang = self._TESS_LANG_MAP.get(src_code, "eng")
-                    
-                    self._set_status(f"● OCR en progreso ({tess_lang})…", "info")
-                    content = pytesseract.image_to_string(img, lang=tess_lang).strip()
+
+                    self._set_status(
+                        f"● OCR en progreso ({tess_lang})…", "info")
+                    content = pytesseract.image_to_string(
+                        img, lang=tess_lang).strip()
                     if not content:
-                        self._set_status("✗ no se detectó texto en la imagen", "warn")
+                        self._set_status(
+                            "✗ no se detectó texto en la imagen", "warn")
                         return
                 except ImportError:
-                    self._set_status("✗ faltan dependencias: pip install pytesseract Pillow", "error")
+                    self._set_status(
+                        "✗ faltan dependencias: pip install pytesseract Pillow", "error")
                     return
                 except Exception as ex:
-                    self._set_status("✗ error OCR: ¿está instalado tesseract-ocr en el sistema?", "error")
+                    self._set_status(
+                        "✗ error OCR: ¿está instalado tesseract-ocr en el sistema?", "error")
                     return
             else:
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
-            
+
             self._suspend_auto = True
             self.view.set_input(content)
             self.view.set_char_count(len(content))
             self._suspend_auto = False
-            self._set_status(f"● archivo cargado: {len(content)} caracteres", "ok")
-            
+            self._set_status(
+                f"● archivo cargado: {
+                    len(content)} caracteres", "ok")
+
             if self.view.auto_enabled and content.strip():
                 self._schedule_translate()
         except Exception as e:
@@ -531,11 +609,11 @@ class TranslatorController:
         if not content.strip():
             self._set_status("● nada que guardar", "warn")
             return
-            
+
         path = self.view.ask_save_file()
         if not path:
             return
-            
+
         try:
             ext = path.lower()
             if ext.endswith(".pdf"):
@@ -544,8 +622,9 @@ class TranslatorController:
                 pdf.add_page()
                 pdf.set_font("Helvetica", size=12)
                 # Limpiar caracteres que fpdf con fuente estándar no soporta
-                clean_content = content.encode('windows-1252', 'replace').decode('windows-1252')
-                pdf.multi_cell(0, 8, txt=clean_content)
+                clean_content = content.encode(
+                    'windows-1252', 'replace').decode('windows-1252')
+                pdf.multi_cell(0, 8, text=clean_content)
                 pdf.output(path)
             elif ext.endswith(".docx"):
                 import docx
@@ -568,8 +647,9 @@ class TranslatorController:
                     path += ".txt"
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(content)
-                    
-            self._set_status(f"● traducción guardada como {ext.split('.')[-1].upper()}", "ok")
+
+            self._set_status(
+                f"● traducción guardada como {ext.split('.')[-1].upper()}", "ok")
         except Exception as e:
             self._set_status(f"✗ error al guardar: {e}", "error")
 
@@ -578,9 +658,9 @@ class TranslatorController:
         # Cancelar cualquier traducción en curso
         if self._current_translate_evt:
             self._current_translate_evt.set()
-        
+
         # Detener cualquier timer de debouncing
         if self._translate_timer:
             self.view.after_cancel(self._translate_timer)
-            
+
         self.view.destroy()
