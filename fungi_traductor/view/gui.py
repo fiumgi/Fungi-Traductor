@@ -329,6 +329,8 @@ class TranslatorView(tk.Tk):
 
         self.btn_clear = self._mk_btn(bottom, "Limpiar")
         self.btn_copy = self._mk_btn(bottom, "Copiar")
+        self.btn_open = self._mk_btn(bottom, "📁 Abrir")
+        self.btn_save = self._mk_btn(bottom, "💾 Guardar")
 
         self.btn_translate = tk.Button(
             bottom, text="Traducir  Ctrl+↵",
@@ -336,7 +338,9 @@ class TranslatorView(tk.Tk):
         )
 
         self.btn_translate.pack(side="right", padx=5)
+        self.btn_save.pack(side="right", padx=5)
         self.btn_copy.pack(side="right", padx=5)
+        self.btn_open.pack(side="right", padx=5)
         self.btn_clear.pack(side="right", padx=5)
 
     # ── Helpers ───────────────────────────────────────────────────────────
@@ -441,6 +445,31 @@ class TranslatorView(tk.Tk):
         self.output_text.delete("1.0", "end")
         self.output_text.insert("1.0", text)
         self.output_text.config(state="disabled")
+
+    def ask_open_file(self) -> str | None:
+        """Abre un diálogo para seleccionar un archivo soportado (.txt, .pdf, .docx, .odt)"""
+        from tkinter import filedialog
+        return filedialog.askopenfilename(
+            title="Abrir archivo",
+            filetypes=[
+                ("Archivos soportados", "*.txt *.pdf *.docx *.odt"),
+                ("Archivos de texto", "*.txt"),
+                ("Archivos PDF", "*.pdf"),
+                ("Archivos Word", "*.docx"),
+                ("Archivos OpenDocument", "*.odt"),
+                ("Todos los archivos", "*.*")
+            ]
+        )
+
+    def ask_save_file(self, default_name: str = "traduccion.txt") -> str | None:
+        """Abre un diálogo para guardar la traducción"""
+        from tkinter import filedialog
+        return filedialog.asksaveasfilename(
+            title="Guardar traducción",
+            initialfile=default_name,
+            defaultextension=".txt",
+            filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
+        )
 
     def get_output(self) -> str:
         return self.output_text.get("1.0", "end-1c")

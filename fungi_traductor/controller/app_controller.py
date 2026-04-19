@@ -10,7 +10,7 @@ class TranslatorController:
         self.model = model
         self._pairs_by_source = {}
         self._suspend_auto = False
-        self._ui_queue = Queue()
+        self._ui_queue = Queue(maxsize=50)
         self._init_state = "idle"
         
         # Cache para evitar búsquedas repetidas
@@ -31,6 +31,8 @@ class TranslatorController:
         self.view.btn_swap.config(command=self.swap_languages)
         self.view.btn_clear.config(command=self.clear)
         self.view.btn_copy.config(command=self.copy)
+        self.view.btn_open.config(command=self._on_open_file)
+        self.view.btn_save.config(command=self._on_save_file)
         self.view.bind_auto_toggle(self.toggle_auto)
         self.view.bind_input_change(self._on_input_change)
         self.view.bind_from_change(self._on_from_change)
@@ -424,6 +426,63 @@ class TranslatorController:
             self.view.clipboard_clear()
             self.view.clipboard_append(text)
             self._set_status("● copiado al portapapeles", "ok")
+
+    def _on_open_file(self):
+        """Carga el contenido de un archivo (.txt, .pdf, .docx, .odt) en el input"""
+        path = self.view.ask_open_file()
+        if not path:
+            return
+        
+        try:
+            ext = path.lower()
+            if ext.endswith(".pdf"):
+                self._set_status("● extrayendo texto de PDF…", "info")
+                import fitz  # PyMuPDF
+                doc = fitz.open(path)
+                content = "".join([page.get_text() for page in doc])
+                doc.close()
+            elif ext.endswith(".docx"):
+                self._set_status("● extrayendo texto de Word…", "info")
+                import docx
+                doc = docx.Document(path)
+                content = "\n".join([p.text for p in doc.paragraphs])
+            elif ext.endswith(".odt"):
+                self._set_status("● extrayendo texto de ODT…", "info")
+                from odf import opendocument, teletype
+                doc = opendocument.load(path)
+                content = teletype.get_all_text(doc)
+            else:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            
+            self._suspend_auto = True
+            self.view.set_input(content)
+            self.view.set_char_count(len(content))
+            self._suspend_auto = False
+            self._set_status(f"● archivo cargado: {len(content)} caracteres", "ok")
+            
+            if self.view.auto_enabled and content.strip():
+                self._schedule_translate()
+        except Exception as e:
+            self._set_status(f"✗ error al leer archivo: {e}", "error")
+
+    def _on_save_file(self):
+        """Guarda la traducción actual en un archivo .txt"""
+        content = self.view.get_output()
+        if not content.strip():
+            self._set_status("● nada que guardar", "warn")
+            return
+            
+        path = self.view.ask_save_file()
+        if not path:
+            return
+            
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            self._set_status("● traducción guardada", "ok")
+        except Exception as e:
+            self._set_status(f"✗ error al guardar: {e}", "error")
 
     def on_close(self):
         """Maneja el cierre de la ventana"""

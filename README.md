@@ -1,17 +1,20 @@
 # 🍄 Fungi Traductor
 
-![Fungi Traductor Icon](fungi_traductor/assets/icon.png)
+![Fungi Traductor Icon](fungi_traductor/assets/main.png)
 
-Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado para ofrecer privacidad total, velocidad y una experiencia de usuario fluida. Basado en el motor de **Argos Translate**, permite traducir textos sin conexión a internet entre múltiples idiomas.
+Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado para ofrecer privacidad total, velocidad y una experiencia de usuario profesional. Basado en el motor de **Argos Translate**, permite traducir textos y documentos sin conexión a internet entre múltiples idiomas.
 
 ---
 
 ## ✨ Características Premium
 
 - **🌐 100% Offline**: Privacidad garantizada. Tus textos nunca salen de tu equipo.
-- **⚡ Auto-Traducción Inteligente**: Traduce en tiempo real mientras escribes, ahora con **Caché de resultados** para respuestas instantáneas.
-- **🔊 Lectura por Voz (TTS)**: Motor de voz integrado con soporte para múltiples idiomas y protección contra hilos concurrentes.
-- **🔍 Detección Automática**: Identifica el idioma de entrada automáticamente usando `langdetect` y una base de datos de pistas optimizada.
+- **📄 Soporte de Documentos**: Traduce archivos completos cargándolos con un clic.
+  - Soporta: **.txt, .pdf, .docx (Word), .odt (OpenDocument)**.
+- **💾 Exportación**: Guarda tus traducciones directamente en archivos `.txt`.
+- **⚡ Auto-Traducción Inteligente**: Traducción en tiempo real con **Caché de resultados** para respuestas instantáneas.
+- **🔊 Lectura por Voz (TTS)**: Motor de voz integrado con soporte para múltiples idiomas y protección contra hilos.
+- **🔍 Detección Automática**: Identifica el idioma de entrada automáticamente.
 - **⌨️ Atajos de Teclado**: 
   - `Ctrl + Enter`: Traducir manualmente.
   - `Ctrl + L`: Limpiar paneles de texto.
@@ -69,14 +72,14 @@ El resultado aparecerá en la carpeta `dist/`.
 Fungi-Traductor/
 ├── fungi_traductor/          # Núcleo del paquete Python
 │   ├── assets/               # Recursos visuales (iconos, imágenes)
-│   ├── controller/           # Controlador (Lógica de eventos)
-│   ├── model/                # Modelos de traducción, TTS y hints
+│   ├── controller/           # Controlador (MVC)
+│   ├── model/                # Motores de traducción, TTS y datos
 │   ├── view/                 # Interfaz gráfica (Tkinter)
 │   ├── __init__.py           # Inicializador de paquete
-│   └── __main__.py           # Punto de entrada para ejecución modular
-├── app.py                    # Script de inicio rápido (wrapper)
-├── build_exe.bat             # Script de construcción (Windows)
-├── build_exe.sh              # Script de construcción (Linux)
+│   └── __main__.py           # Punto de entrada modular
+├── app.py                    # Wrapper de inicio rápido
+├── build_exe.bat             # Compilador (Windows)
+├── build_exe.sh              # Compilador (Linux)
 ├── pyproject.toml            # Configuración de empaquetado y pipx
 ├── requirements.txt          # Dependencias del proyecto
 └── README.md                 # Documentación del proyecto
