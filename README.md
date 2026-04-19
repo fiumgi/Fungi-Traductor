@@ -1,128 +1,99 @@
-## 🍄 Fungi Traductor 
+# 🍄 Fungi Traductor
 
-Traductor offline con interfaz gráfica construido con argostranslate + Tkinter.  
-Arquitectura MVC modular, redimensionable y multi-idioma.
-![interfaz](assets/main.png)
----
-## 📚 Base del proyecto
+![Fungi Traductor Icon](fungi_traductor/assets/icon.png)
 
-Este proyecto utiliza Argos Translate como motor principal de traducción offline.
+Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado para ofrecer privacidad total y velocidad. Basado en el motor de **Argos Translate**, permite traducir textos sin conexión a internet entre múltiples idiomas.
 
 ---
 
-## 🚀 Instalación rápida
+## ✨ Características Premium
 
-```git clone https://github.com/fiumgi/Fungi-Traductor```
-
-```cd Fungi-Traductor```
-
-```pip install -r requirements.txt```
-
-```python app.py```
+- **🌐 100% Offline**: Tus datos nunca salen de tu equipo. Privacidad garantizada.
+- **⚡ Auto-Traducción Inteligente**: Traduce en tiempo real mientras escribes (con sistema de *debouncing* para evitar sobrecarga).
+- **🔊 Lectura por Voz (TTS)**: Motor de voz integrado con soporte para múltiples voces.
+- **🔍 Detección de Idioma**: Identificación automática del idioma de entrada mediante `langdetect`.
+- **🎨 Interfaz Adaptativa**: Diseño oscuro (Dark Mode) nítido gracias al soporte de **High DPI Awareness** (evita el desenfoque en Windows).
+- **📦 Distribución Moderna**: Compatible con `pipx` para uso global y scripts de compilación para crear ejecutables independientes.
 
 ---
 
-## ✨ Funcionalidades
+## 🚀 Instalación y Uso
 
-| Función | Descripción |
-|--------|------------|
-| Multi-idioma | Combobox con idiomas disponibles |
-| Swap ⇄ | Intercambia idiomas y textos |
-| Scrollbars | Paneles con desplazamiento |
-| Auto-traducción | Botón ⚡ Auto (debounce) |
-| Detección | Usa langdetect |
-| TTS | Texto a voz con pyttsx3 |
-| Logging | fungi_traductor.log |
-| Responsive | UI redimensionable |
-Permitir elegir manualmente la voz desde la interfaz.
-Mostrar progreso más detallado durante descarga e instalación de paquetes.
----
+### 1. Vía pipx (Recomendado)
+Para usar el traductor como una aplicación global en tu terminal:
 
-## 🧱 Estructura del proyecto
-
+```bash
+pipx install git+https://github.com/fiumgi/Fungi-Traductor.git
 ```
+
+Una vez instalado, simplemente escribe:
+```bash
+fungi-traductor
+```
+
+### 2. Para Desarrolladores (Código Fuente)
+1. Clona el repositorio:
+   ```bash
+   git clone https://github.com/fiumgi/Fungi-Traductor.git
+   cd Fungi-Traductor
+   ```
+2. Instala las dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Ejecuta la aplicación:
+   ```bash
+   python app.py
+   ```
+
+---
+
+## 🛠️ Creación de Ejecutables (Build)
+
+Si prefieres generar un archivo `.exe` o un binario de Linux que no requiera instalar Python:
+
+- **Windows**: Ejecuta el archivo `build_exe.bat`.
+- **Linux**: Ejecuta `./build_exe.sh` (asegúrate de darle permisos: `chmod +x build_exe.sh`).
+
+El resultado aparecerá en la carpeta `dist/`.
+
+---
+
+## 🧱 Estructura del Proyecto
+
+```text
 Fungi-Traductor/
-│
-├── fungi_traductor/
-│ ├── init.py
-│ ├── model/
-│ │ └── translator.py
-│ ├── view/
-│ │ └── gui.py
-│ └── controller/
-│ └── app_controller.py
-│
-├── app.py
-├── pyproject.toml
-├── requirements.txt
-├── build_exe.bat
-├── build_exe.sh
-└── README.md
-
+├── fungi_traductor/          # Núcleo del paquete Python
+│   ├── assets/               # Recursos visuales (iconos, imágenes)
+│   ├── controller/           # Controlador principal (Lógica MVC)
+│   ├── model/                # Motores de traducción y voz
+│   ├── view/                 # Diseño de la interfaz (Tkinter)
+│   ├── __init__.py           # Inicializador de paquete
+│   └── __main__.py           # Punto de entrada para ejecución modular
+├── app.py                    # Wrapper para ejecución directa
+├── build_exe.bat             # Script de compilación (Windows)
+├── build_exe.sh              # Script de compilación (Linux)
+├── pyproject.toml            # Configuración de empaquetado y pipx
+├── requirements.txt          # Dependencias del proyecto
+└── README.md                 # Documentación (este archivo)
 ```
----
-
-## 📦 Instalar como app (pipx)
-
-pipx:
-```pipx install git+https://github.com/fiumgi/Fungi-Traductor.git```
-
-Luego ejecutar desde cualquier lugar:
-```fungi-traductor```
 
 ---
 
-## ⚙️ Crear ejecutable
+## ⚠️ Requisitos y Solución de Problemas
 
-### Windows
-build_exe.bat
-
-### Linux / macOS
-```chmod +x build_exe.sh```
-
-```./build_exe.sh```
+- **Python**: Versión 3.10 o superior.
+- **Linux**: Si encuentras errores de interfaz o de voz, instala las dependencias del sistema:
+  - `sudo apt install python3-tk` (Interfaz gráfica)
+  - `sudo apt install espeak` (Motor de voz)
 
 ---
-
-## 🔌 Dependencias opcionales
-
-```pip install langdetect``` 
-/ detecta el idioma automaticamente 
-
-```pip install pyttsx3```
-/ sirve para la opcion de speak
-
----
-
-## ⚠️ Notas
-
-- No subir `dist/`, `build/`, `__pycache__/`
-- Requiere Python 3.10+
-## problemas en linux
-Tkinter: Como recordarás, tkinter es parte de la librería estándar de Python. En Windows viene instalado por defecto, pero si algún usuario en Linux tiene problemas al ejecutarlo, deberá instalarlo desde su terminal (fuera de pip) con:
-
-### Ubuntu/Debian: 
-```sudo apt-get install python3-tk```
-
-### Fedora: 
-```sudo dnf install python3-tkinter```
-
-### Uso con el build: Al haber incluido estas librerías aquí, los scripts build_exe.bat y build_exe.sh que creamos antes las instalarán automáticamente antes de empezar la compilación.
 
 ## 🙏 Créditos
 
-Este proyecto está basado en:
+Este proyecto es posible gracias a la comunidad de código abierto:
+- [Argos Translate](https://github.com/argosopentech/argos-translate)
+- [langdetect](https://pypi.org/project/langdetect/)
+- [pyttsx3](https://github.com/nateshmbhat/pyttsx3)
 
-* [Argos Translate](https://github.com/argosopentech/argos-translate) - Motor de traducción offline basado en OpenNMT.
-* [langdetect](https://pypi.org/project/langdetect/) - Implementación en Python del detector de idiomas de Google.
-* [pyttsx3](https://pyttsx3.readthedocs.io/) - Librería de conversión de texto a voz compatible con múltiples motores.
-
-Todo el crédito de estas herramientas pertenece a sus respectivos autores.
-### 📄 Licencia
-Este proyecto es gratuito para uso personal y educativo.
-
-- ✔️ Uso, modificación y distribución permitidos  
-- ❌ Uso comercial no permitido  
-- ℹ️ Se debe dar crédito al autor original (fiumgi)  
-
-Ver el archivo [LICENSE](LICENSE) para más detalles.
+Desarrollado con Amor❤️ por **fiumgi**.

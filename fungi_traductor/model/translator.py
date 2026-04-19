@@ -5,16 +5,31 @@ Patrón MVC · Fungi Traductor
 import logging
 import re
 import threading
+import sys
+import os
 from pathlib import Path
 
 # ── Logging ───────────────────────────────────────────────────────────────────
-_log_path = Path(__file__).parent / "fungi_traductor.log"
-logging.basicConfig(
-    filename=_log_path,
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+def _get_log_path():
+    if getattr(sys, 'frozen', False):
+        # Si es un EXE, el log va junto al ejecutable
+        return Path(sys.executable).parent / "fungi_traductor.log"
+    return Path(__file__).parent / "fungi_traductor.log"
+
+try:
+    logging.basicConfig(
+        filename=_get_log_path(),
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+except Exception:
+    # Si falla el archivo (permisos), loguear a consola
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 log = logging.getLogger(__name__)
 
 _SHORT_TEXT_EXACT_HINTS = {
@@ -76,6 +91,8 @@ class TranslatorModel:
         self.ready      = False
         self._available: list = []   # paquetes disponibles en el índice
         self._tts_voice_cache: list[dict] | None = None
+        self._tts_lock = threading.Lock()
+        self._translation_cache = {}  # {(text, from, to): result}
 
     # ── Inicialización ────────────────────────────────────────────────────────
 
@@ -172,6 +189,14 @@ class TranslatorModel:
             if on_progress:
                 on_progress("install", 80, f"Instalando paquete {from_code}→{to_code}…")
             self._pkg_mod.install_from_path(package_path)
+            
+            # Limpiar archivo temporal después de instalar
+            try:
+                if os.path.exists(package_path):
+                    os.remove(package_path)
+            except Exception as e:
+                log.warning(f"No se pudo eliminar paquete temporal: {e}")
+
             log.info(f"Instalado: {from_code}→{to_code}")
             if on_progress:
                 on_progress("install", 100, f"Paquete {from_code}→{to_code} listo")
@@ -187,8 +212,22 @@ class TranslatorModel:
     def translate(self, text: str, from_code: str, to_code: str) -> str:
         if not self._trans_mod:
             raise RuntimeError("Modelo no inicializado")
+        
+        cache_key = (text, from_code, to_code)
+        if cache_key in self._translation_cache:
+            log.info(f"Caché hit: {len(text)} chars {from_code}→{to_code}")
+            return self._translation_cache[cache_key]
+
         result = self._trans_mod.translate(text, from_code, to_code)
-        log.info(f"Traducidos {len(text)} chars  {from_code}→{to_code}")
+        
+        # Guardar en caché y limitar tamaño (p.ej. 100 entradas)
+        if len(self._translation_cache) >= 100:
+            # Eliminar la entrada más vieja (primera insertada)
+            oldest_key = next(iter(self._translation_cache))
+            del self._translation_cache[oldest_key]
+        
+        self._translation_cache[cache_key] = result
+        log.info(f"Traducidos {len(text)} chars  {from_code}→{to_code} (Guardado en caché)")
         return result
 
     # ── Detección de idioma ───────────────────────────────────────────────────
@@ -278,24 +317,25 @@ class TranslatorModel:
     def speak(self, text: str, lang: str = "es", voice_id: str | None = None):
         """Reproduce el texto en voz alta en un hilo separado."""
         def _run():
-            try:
-                import pyttsx3
-                engine = pyttsx3.init()
-                engine.setProperty("rate", 155)
-                chosen_voice_id = self._choose_voice_id(lang, voice_id)
-                if chosen_voice_id:
-                    engine.setProperty("voice", chosen_voice_id)
-                engine.say(text)
-                engine.runAndWait()
-                engine.stop()
-                log.info(
-                    f"TTS: {len(text)} chars en idioma '{lang}' "
-                    f"con voz '{chosen_voice_id or 'automática'}'"
-                )
-            except ImportError:
-                log.error("pyttsx3 no instalado — ejecuta: pip install pyttsx3")
-            except Exception as exc:
-                log.error(f"Error en TTS: {exc}")
+            with self._tts_lock:
+                try:
+                    import pyttsx3
+                    engine = pyttsx3.init()
+                    engine.setProperty("rate", 155)
+                    chosen_voice_id = self._choose_voice_id(lang, voice_id)
+                    if chosen_voice_id:
+                        engine.setProperty("voice", chosen_voice_id)
+                    engine.say(text)
+                    engine.runAndWait()
+                    engine.stop()
+                    log.info(
+                        f"TTS: {len(text)} chars en idioma '{lang}' "
+                        f"con voz '{chosen_voice_id or 'automática'}'"
+                    )
+                except ImportError:
+                    log.error("pyttsx3 no instalado — ejecuta: pip install pyttsx3")
+                except Exception as exc:
+                    log.error(f"Error en TTS: {exc}")
 
         threading.Thread(target=_run, daemon=True).start()
 

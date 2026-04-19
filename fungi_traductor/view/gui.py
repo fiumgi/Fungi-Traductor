@@ -8,8 +8,26 @@ OPTIMIZACIONES:
 - Actualización eficiente de UI
 - Bindings optimizados
 """
+import os
+import sys
 import tkinter as tk
 from tkinter import ttk
+from pathlib import Path
+
+def resource_path(relative_path):
+    """Obtener ruta absoluta para recursos, funciona para dev, PyInstaller y pipx"""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    
+    # Subir tres niveles desde fungi_traductor/view/gui.py para llegar a la raíz del proyecto/paquete
+    base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    full_path = os.path.join(base_path, relative_path)
+    
+    if os.path.exists(full_path):
+        return full_path
+    
+    # Fallback al directorio de trabajo actual
+    return os.path.join(os.path.abspath("."), relative_path)
 
 # ── Tema ─────────────────────────────────────────────────────────────────────
 BG      = "#0f1117"
@@ -41,6 +59,15 @@ class TranslatorView(tk.Tk):
         self.minsize(740, 520)
         self.configure(bg=BG)
         self.resizable(True, True)
+
+        # Icono de ventana
+        try:
+            icon_path = resource_path(os.path.join("fungi_traductor", "assets", "icon.png"))
+            if os.path.exists(icon_path):
+                img = tk.PhotoImage(file=icon_path)
+                self.iconphoto(True, img)
+        except Exception:
+            pass
 
         # Estado
         self._font_size = 12
@@ -76,6 +103,10 @@ class TranslatorView(tk.Tk):
         self.bind('<Control-Return>', lambda e: self._trigger_translate())
         self.bind('<Control-l>', lambda e: self.btn_clear.invoke())
         
+        # También vincular directamente al widget de texto para asegurar que funcione con foco
+        self.input_text.bind('<Control-Return>', lambda e: self._trigger_translate())
+        self.input_text.bind('<Control-l>', lambda e: self.btn_clear.invoke())
+        
         self.after(100, self.input_text.focus_set)
 
     # ── UI ───────────────────────────────────────────────────────────
@@ -83,12 +114,30 @@ class TranslatorView(tk.Tk):
     def _init_styles(self):
         """Inicializar estilos ttk una sola vez"""
         style = ttk.Style()
+        
+        # Forzar tema 'clam' para mejor soporte de colores personalizados
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
+        
+        # Configuración base para Combobox
         style.configure(
             "TCombobox",
             fieldbackground=PANEL,
             foreground=TEXT,
-            background=PANEL
+            background=BORDER,
+            arrowcolor=TEXT,
+            bordercolor=BORDER,
+            darkcolor=PANEL,
+            lightcolor=PANEL,
         )
+        
+        # Mapa de estados para asegurar visibilidad constante
+        style.map("TCombobox",
+            fieldbackground=[("readonly", PANEL), ("disabled", PANEL), ("active", PANEL)],
+            foreground=[("readonly", TEXT), ("disabled", SUBTEXT), ("active", TEXT)],
+            arrowcolor=[("disabled", BORDER), ("active", ACCENT)]
+        )
+
         style.configure(
             "Loading.Horizontal.TProgressbar",
             troughcolor=PANEL,
@@ -96,6 +145,22 @@ class TranslatorView(tk.Tk):
             bordercolor=BORDER,
             lightcolor=ACCENT,
             darkcolor=ACCENT,
+        )
+
+        # Estilo para Scrollbars
+        style.configure(
+            "TScrollbar",
+            gripcount=0,
+            background=PANEL,
+            troughcolor=BG,
+            bordercolor=BORDER,
+            darkcolor=PANEL,
+            lightcolor=PANEL,
+            arrowcolor=SUBTEXT
+        )
+        style.map("TScrollbar",
+            background=[("active", BORDER), ("disabled", PANEL)],
+            arrowcolor=[("active", ACCENT)]
         )
 
     def _trigger_translate(self):
@@ -208,8 +273,15 @@ class TranslatorView(tk.Tk):
             bg=PANEL, fg=TEXT, insertbackground=ACCENT,
             relief="flat", padx=12, pady=10,
             wrap="word", undo=True,
+            highlightthickness=1, highlightbackground=BORDER,
+            highlightcolor=ACCENT,
         )
-        self.input_text.pack(expand=True, fill="both")
+        
+        # Scrollbar para entrada
+        in_scroll = ttk.Scrollbar(lf, orient="vertical", command=self.input_text.yview)
+        self.input_text.configure(yscrollcommand=in_scroll.set)
+        in_scroll.pack(side="right", fill="y")
+        self.input_text.pack(side="left", expand=True, fill="both")
 
         tk.Label(panels, text="→", font=("Georgia", 20),
                  bg=BG, fg=SUBTEXT).grid(row=1, column=1)
@@ -223,8 +295,15 @@ class TranslatorView(tk.Tk):
             bg=PANEL, fg=SUCCESS, state="disabled",
             relief="flat", padx=12, pady=10,
             wrap="word",
+            highlightthickness=1, highlightbackground=BORDER,
+            highlightcolor=BORDER,
         )
-        self.output_text.pack(expand=True, fill="both")
+        
+        # Scrollbar para salida
+        out_scroll = ttk.Scrollbar(rf, orient="vertical", command=self.output_text.yview)
+        self.output_text.configure(yscrollcommand=out_scroll.set)
+        out_scroll.pack(side="right", fill="y")
+        self.output_text.pack(side="left", expand=True, fill="both")
 
     def _build_bottom(self):
         bottom = tk.Frame(self, bg=BG, pady=10)
@@ -353,6 +432,10 @@ class TranslatorView(tk.Tk):
 
     def get_output(self) -> str:
         return self.output_text.get("1.0", "end-1c")
+
+    def set_char_count(self, count: int):
+        """Actualiza el contador de caracteres en la parte inferior"""
+        self.char_lbl.config(text=f"{count} caracteres")
 
     def populate_from(self, items: list[tuple[str, str]]):
         current = self.from_combo.get()

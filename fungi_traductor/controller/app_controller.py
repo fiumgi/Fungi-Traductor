@@ -98,6 +98,9 @@ class TranslatorController:
                 elif kind == "init_done":
                     _, success = task
                     self._finish_initialize(success)
+                elif kind == "toggle_ui":
+                    _, enabled = task
+                    self._toggle_ui(enabled)
         except Empty:
             pass
         finally:
@@ -113,6 +116,8 @@ class TranslatorController:
         elif self._init_state != "error":
             self._init_state = "ready"
             self._apply_status("● listo", "ok")
+        
+        self._toggle_ui(True)
 
     def _populate_language_lists(self):
         """Versión optimizada con mejor gestión de memoria"""
@@ -212,6 +217,8 @@ class TranslatorController:
             return
 
         text = self.view.get_input()
+        self.view.set_char_count(len(text))
+
         if self.view.auto_enabled:
             if text.strip():
                 # Solo traducir si el texto cambió y no hay traducción pendiente
@@ -245,6 +252,11 @@ class TranslatorController:
 
     def translate(self):
         """Traducción en hilo separado para no bloquear UI"""
+        # Cancelar cualquier temporizador automático pendiente
+        if self._translate_timer is not None:
+            self.view.after_cancel(self._translate_timer)
+            self._translate_timer = None
+
         text = self.view.get_input()
         src = self.view.get_from_code()
         tgt = self.view.get_to_code()
@@ -252,6 +264,10 @@ class TranslatorController:
         if not text.strip():
             return
 
+        if len(text) > 5000:
+            self._set_status("● texto largo: la traducción puede tardar", "warn")
+
+        self._toggle_ui(False)
         self._last_translate_text = text
         
         # Ejecutar en hilo separado para no bloquear UI
@@ -280,12 +296,26 @@ class TranslatorController:
                 self._set_status("● traducción lista", "ok")
             finally:
                 self._set_loading(False)
+                self._ui_queue.put(("toggle_ui", True))
         except Exception as e:
             self._set_loading(False)
             self._set_status(f"● error: {e}", "error")
+            self._ui_queue.put(("toggle_ui", True))
+
+    def _toggle_ui(self, enabled: bool):
+        """Habilita o deshabilita los controles principales de la interfaz"""
+        state = "normal" if enabled else "disabled"
+        self.view.btn_translate.config(state=state)
+        self.view.btn_detect.config(state=state)
+        self.view.btn_swap.config(state=state)
+        self.view.btn_clear.config(state=state)
+        self.view.from_combo.config(state="readonly" if enabled else "disabled")
+        self.view.to_combo.config(state="readonly" if enabled else "disabled")
+        self.view.input_text.config(state=state)
 
     def _detect_language_async(self):
         """Detección en hilo separado"""
+        self._toggle_ui(False)
         threading.Thread(
             target=self.detect_language,
             daemon=True
@@ -354,6 +384,7 @@ class TranslatorController:
 
             self.view.set_input(output_text)
             self.view.set_output(input_text)
+            self.view.set_char_count(len(output_text))
             self._suspend_auto = False
 
             if self.view.auto_enabled and output_text.strip():
@@ -367,6 +398,7 @@ class TranslatorController:
         self._suspend_auto = True
         self.view.set_input("")
         self.view.set_output("")
+        self.view.set_char_count(0)
         self._suspend_auto = False
         self._set_status("● limpio", "info")
 

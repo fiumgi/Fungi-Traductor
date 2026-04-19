@@ -16,8 +16,14 @@ dependencies = [
 ]
 
 [project.scripts]
-fungi-traductor = "app:main"
+fungi-traductor = "fungi_traductor.__main__:main"
+
+[tool.setuptools]
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["fungi_traductor*"]
+
+[tool.setuptools.package-data]
+"fungi_traductor" = ["assets/*.png", "assets/*.ico"]

@@ -9,4 +9,4 @@ langdetect>=1.0.9       # detección automática de idioma  (pip install langdet
 pyttsx3>=2.90           # texto a voz offline             (pip install pyttsx3)
 
 # ── Solo para empaquetar como .exe ────────────────────────────────────────────
-# pyinstaller>=6.0      # descomenta solo si vas a empaquetar
+pyinstaller>=6.0
