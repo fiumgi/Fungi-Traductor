@@ -2,7 +2,7 @@
 
 ![Fungi Traductor Icon](fungi_traductor/assets/main.png)
 
-Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado para ofrecer privacidad total, velocidad y una experiencia de usuario profesional. Basado en el motor de **Argos Translate**, permite traducir textos y documentos sin conexión a internet entre múltiples idiomas.
+Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado para ofrecer privacidad total, velocidad y una experiencia de usuario profesional. Basado en el motor de **Argos Translate**, permite traducir textos, imágenes y documentos sin conexión a internet entre múltiples idiomas.
 
 ---
 
@@ -11,7 +11,8 @@ Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado p
 - **🌐 100% Offline**: Privacidad garantizada. Tus textos nunca salen de tu equipo.
 - **📄 Soporte de Documentos**: Traduce archivos completos cargándolos con un clic.
   - Soporta: **.txt, .pdf, .docx (Word), .odt (OpenDocument)**.
-- **💾 Exportación**: Guarda tus traducciones directamente en archivos `.txt`.
+- **🖼️ Reconocimiento de Imágenes (OCR)**: Extrae y traduce texto de imágenes **.png, .jpg, .jpeg** automáticamente.
+- **💾 Exportación Multi-formato**: Guarda tus traducciones directamente en archivos **.txt, .pdf, .docx o .odt**.
 - **⚡ Auto-Traducción Inteligente**: Traducción en tiempo real con **Caché de resultados** para respuestas instantáneas.
 - **🔊 Lectura por Voz (TTS)**: Motor de voz integrado con soporte para múltiples idiomas y protección contra hilos.
 - **🔍 Detección Automática**: Identifica el idioma de entrada automáticamente.
@@ -90,7 +91,10 @@ Fungi-Traductor/
 ## ⚠️ Requisitos y Solución de Problemas
 
 - **Python**: Versión 3.10 o superior.
-- **Linux**: Si encuentras errores de interfaz o de voz, instala las dependencias del sistema:
+- **Tesseract OCR**: Para la función de imágenes, necesitas instalar Tesseract en tu sistema:
+  - **Linux**: `sudo apt install tesseract-ocr`
+  - **Windows**: Descarga el instalador de [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki).
+- **Linux (UI/Voz)**: Si encuentras errores de interfaz o de voz, instala:
   - `sudo apt install python3-tk` (Interfaz gráfica)
   - `sudo apt install espeak` (Motor de voz)
 
@@ -102,6 +106,9 @@ Este proyecto es posible gracias a la comunidad de código abierto:
 - [Argos Translate](https://github.com/argosopentech/argos-translate)
 - [langdetect](https://pypi.org/project/langdetect/)
 - [pyttsx3](https://github.com/nateshmbhat/pyttsx3)
-- [platformdirs](https://github.com/platformdirs/platformdirs)
+- [PyMuPDF](https://github.com/pymupdf/PyMuPDF)
+- [python-docx](https://github.com/python-openxml/python-docx)
+- [odfpy](https://github.com/eea/odfpy)
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
 
 Desarrollado con Amor❤️ por **fiumgi**.

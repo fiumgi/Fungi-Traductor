@@ -43,10 +43,18 @@ class TranslatorController:
     # ── INICIALIZACIÓN ─────────────────────────────────────────
 
     def _set_status(self, msg, level="info"):
-        self._ui_queue.put(("status", msg, level))
+        try:
+            from queue import Full
+            self._ui_queue.put_nowait(("status", msg, level))
+        except Full:
+            pass
 
     def _set_loading(self, active, mode="indeterminate", value=None, detail=""):
-        self._ui_queue.put(("loading", active, mode, value, detail))
+        try:
+            from queue import Full
+            self._ui_queue.put_nowait(("loading", active, mode, value, detail))
+        except Full:
+            pass
 
     def _apply_status(self, msg, level="info"):
         self.view.set_status(msg, level)
@@ -61,12 +69,19 @@ class TranslatorController:
     def _initialize_async(self):
         # Inicializar modelo (Argos packages)
         if not self.model.init_packages(self._on_init_status, self._on_init_progress):
-            self._ui_queue.put(("init_done", False))
+            try:
+                from queue import Full
+                self._ui_queue.put_nowait(("init_done", False))
+            except Full: pass
             return
 
         # Poblar idiomas
-        self._ui_queue.put(("populate",))
-        self._ui_queue.put(("init_done", True))
+        try:
+            from queue import Full
+            self._ui_queue.put_nowait(("populate",))
+            self._ui_queue.put_nowait(("init_done", True))
+        except Full: pass
+
 
     def _on_init_status(self, msg, level="info"):
         if level == "warn":
@@ -314,7 +329,11 @@ class TranslatorController:
                 self._set_status("● traducción lista", "ok")
             finally:
                 self._set_loading(False)
-                self._ui_queue.put(("toggle_ui", True))
+                try:
+                    from queue import Full
+                    self._ui_queue.put_nowait(("toggle_ui", True))
+                except Full:
+                    pass
         except Exception as e:
             self._set_loading(False)
             self._set_status(f"● error: {e}", "error")
@@ -451,6 +470,22 @@ class TranslatorController:
                 from odf import opendocument, teletype
                 doc = opendocument.load(path)
                 content = teletype.get_all_text(doc)
+            elif ext.endswith((".png", ".jpg", ".jpeg")):
+                self._set_status("● extrayendo texto de imagen (OCR)…", "info")
+                try:
+                    import pytesseract
+                    from PIL import Image
+                    img = Image.open(path)
+                    content = pytesseract.image_to_string(img).strip()
+                    if not content:
+                        self._set_status("✗ no se detectó texto en la imagen", "warn")
+                        return
+                except ImportError:
+                    self._set_status("✗ faltan dependencias: pip install pytesseract Pillow", "error")
+                    return
+                except Exception as ex:
+                    self._set_status("✗ error OCR: ¿está instalado tesseract-ocr en el sistema?", "error")
+                    return
             else:
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
@@ -478,9 +513,39 @@ class TranslatorController:
             return
             
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-            self._set_status("● traducción guardada", "ok")
+            ext = path.lower()
+            if ext.endswith(".pdf"):
+                from fpdf import FPDF
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Helvetica", size=12)
+                # Limpiar caracteres que fpdf con fuente estándar no soporta
+                clean_content = content.encode('windows-1252', 'replace').decode('windows-1252')
+                pdf.multi_cell(0, 8, txt=clean_content)
+                pdf.output(path)
+            elif ext.endswith(".docx"):
+                import docx
+                doc = docx.Document()
+                for line in content.split('\n'):
+                    if line.strip():
+                        doc.add_paragraph(line)
+                doc.save(path)
+            elif ext.endswith(".odt"):
+                from odf.opendocument import OpenDocumentText
+                from odf.text import P
+                doc = OpenDocumentText()
+                for line in content.split('\n'):
+                    if line.strip():
+                        doc.text.addElement(P(text=line))
+                doc.save(path)
+            else:
+                # Fallback a texto plano
+                if not ext.endswith(".txt"):
+                    path += ".txt"
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                    
+            self._set_status(f"● traducción guardada como {ext.split('.')[-1].upper()}", "ok")
         except Exception as e:
             self._set_status(f"✗ error al guardar: {e}", "error")
 

@@ -447,12 +447,13 @@ class TranslatorView(tk.Tk):
         self.output_text.config(state="disabled")
 
     def ask_open_file(self) -> str | None:
-        """Abre un diálogo para seleccionar un archivo soportado (.txt, .pdf, .docx, .odt)"""
+        """Abre un diálogo para seleccionar un archivo o imagen"""
         from tkinter import filedialog
         return filedialog.askopenfilename(
-            title="Abrir archivo",
+            title="Abrir archivo o imagen",
             filetypes=[
-                ("Archivos soportados", "*.txt *.pdf *.docx *.odt"),
+                ("Archivos soportados", "*.txt *.pdf *.docx *.odt *.png *.jpg *.jpeg"),
+                ("Imágenes", "*.png *.jpg *.jpeg"),
                 ("Archivos de texto", "*.txt"),
                 ("Archivos PDF", "*.pdf"),
                 ("Archivos Word", "*.docx"),
@@ -461,14 +462,19 @@ class TranslatorView(tk.Tk):
             ]
         )
 
-    def ask_save_file(self, default_name: str = "traduccion.txt") -> str | None:
-        """Abre un diálogo para guardar la traducción"""
+    def ask_save_file(self, default_name: str = "traduccion") -> str | None:
+        """Abre un diálogo para guardar la traducción en múltiples formatos"""
         from tkinter import filedialog
         return filedialog.asksaveasfilename(
             title="Guardar traducción",
             initialfile=default_name,
             defaultextension=".txt",
-            filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
+            filetypes=[
+                ("Archivo de texto", "*.txt"),
+                ("Archivo PDF", "*.pdf"),
+                ("Documento Word", "*.docx"),
+                ("Documento OpenDocument", "*.odt")
+            ]
         )
 
     def get_output(self) -> str:
