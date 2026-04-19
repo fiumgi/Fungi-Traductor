@@ -103,4 +103,5 @@ Este proyecto es posible gracias a la comunidad de código abierto:
 - [langdetect](https://pypi.org/project/langdetect/)
 - [pyttsx3](https://github.com/nateshmbhat/pyttsx3)
 - [platformdirs](https://github.com/platformdirs/platformdirs)
+
 Desarrollado con Amor❤️ por **fiumgi**.
