@@ -107,6 +107,9 @@ class TranslatorView(tk.Tk):
         self.input_text.bind('<Control-Return>', lambda e: self._trigger_translate())
         self.input_text.bind('<Control-l>', lambda e: self.btn_clear.invoke())
         
+        self.protocol("WM_DELETE_WINDOW", self._on_close_clicked)
+        self._on_close_callback = None
+        
         self.after(100, self.input_text.focus_set)
 
     # ── UI ───────────────────────────────────────────────────────────
@@ -416,6 +419,15 @@ class TranslatorView(tk.Tk):
                 callback(event)
                 self.input_text.edit_modified(False)
         self.input_text.bind("<<Modified>>", wrapper)
+
+    def bind_close(self, callback):
+        self._on_close_callback = callback
+
+    def _on_close_clicked(self):
+        if self._on_close_callback:
+            self._on_close_callback()
+        else:
+            self.destroy()
 
     def get_input(self):
         return self.input_text.get("1.0", "end-1c")

@@ -19,6 +19,7 @@ class TranslatorController:
         self._last_translate_text = ""
         self._translate_scheduled = False
         self._translate_timer = None
+        self._current_translate_evt = None  # Evento para cancelar hilos antiguos
         
         # Lock para operaciones thread-safe
         self._lock = Lock()
@@ -35,6 +36,7 @@ class TranslatorController:
         self.view.bind_from_change(self._on_from_change)
         self.view.bind_to_change(self._on_to_change)
         self.view.bind_voice_change(self._on_voice_change)
+        self.view.bind_close(self.on_close)
 
     # ── INICIALIZACIÓN ─────────────────────────────────────────
 
@@ -270,16 +272,26 @@ class TranslatorController:
         self._toggle_ui(False)
         self._last_translate_text = text
         
+        # Cancelar traducción en curso si existe
+        if self._current_translate_evt:
+            self._current_translate_evt.set()
+        
+        # Crear nuevo evento para esta traducción
+        evt = threading.Event()
+        self._current_translate_evt = evt
+
         # Ejecutar en hilo separado para no bloquear UI
         threading.Thread(
             target=self._translate_async,
-            args=(text, src, tgt),
+            args=(text, src, tgt, evt),
             daemon=True
         ).start()
 
-    def _translate_async(self, text, src, tgt):
+    def _translate_async(self, text, src, tgt, cancel_evt):
         """Traducción asincrónica en segundo plano"""
         try:
+            if cancel_evt.is_set(): return
+
             valid_targets = {code for code, _ in self._pairs_by_source.get(src, [])}
             if tgt not in valid_targets:
                 self._set_status("● combinación de idiomas no disponible", "warn")
@@ -287,11 +299,15 @@ class TranslatorController:
 
             self._set_loading(True, mode="determinate", value=10, detail="Validando paquete…")
             try:
+                if cancel_evt.is_set(): return
                 if not self.model.ensure_pair(src, tgt, self._set_status, self._on_install_progress):
                     return
-
+                
+                if cancel_evt.is_set(): return
                 self._set_loading(True, mode="determinate", value=90, detail="Traduciendo texto…")
                 result = self.model.translate(text, src, tgt)
+                
+                if cancel_evt.is_set(): return
                 self.view.set_output(result)
                 self._set_status("● traducción lista", "ok")
             finally:
@@ -404,10 +420,19 @@ class TranslatorController:
 
     def copy(self):
         text = self.view.get_output()
+        if text.strip():
+            self.view.clipboard_clear()
+            self.view.clipboard_append(text)
+            self._set_status("● copiado al portapapeles", "ok")
 
-        if not text:
-            return
-
-        self.view.clipboard_clear()
-        self.view.clipboard_append(text)
-        self._set_status("● copiado", "ok")
+    def on_close(self):
+        """Maneja el cierre de la ventana"""
+        # Cancelar cualquier traducción en curso
+        if self._current_translate_evt:
+            self._current_translate_evt.set()
+        
+        # Detener cualquier timer de debouncing
+        if self._translate_timer:
+            self.view.after_cancel(self._translate_timer)
+            
+        self.view.destroy()

@@ -2,31 +2,35 @@
 
 ![Fungi Traductor Icon](fungi_traductor/assets/icon.png)
 
-Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado para ofrecer privacidad total y velocidad. Basado en el motor de **Argos Translate**, permite traducir textos sin conexión a internet entre múltiples idiomas.
+Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado para ofrecer privacidad total, velocidad y una experiencia de usuario fluida. Basado en el motor de **Argos Translate**, permite traducir textos sin conexión a internet entre múltiples idiomas.
 
 ---
 
 ## ✨ Características Premium
 
-- **🌐 100% Offline**: Tus datos nunca salen de tu equipo. Privacidad garantizada.
-- **⚡ Auto-Traducción Inteligente**: Traduce en tiempo real mientras escribes (con sistema de *debouncing* para evitar sobrecarga).
-- **🔊 Lectura por Voz (TTS)**: Motor de voz integrado con soporte para múltiples voces.
-- **🔍 Detección de Idioma**: Identificación automática del idioma de entrada mediante `langdetect`.
-- **🎨 Interfaz Adaptativa**: Diseño oscuro (Dark Mode) nítido gracias al soporte de **High DPI Awareness** (evita el desenfoque en Windows).
-- **📦 Distribución Moderna**: Compatible con `pipx` para uso global y scripts de compilación para crear ejecutables independientes.
+- **🌐 100% Offline**: Privacidad garantizada. Tus textos nunca salen de tu equipo.
+- **⚡ Auto-Traducción Inteligente**: Traduce en tiempo real mientras escribes, ahora con **Caché de resultados** para respuestas instantáneas.
+- **🔊 Lectura por Voz (TTS)**: Motor de voz integrado con soporte para múltiples idiomas y protección contra hilos concurrentes.
+- **🔍 Detección Automática**: Identifica el idioma de entrada automáticamente usando `langdetect` y una base de datos de pistas optimizada.
+- **⌨️ Atajos de Teclado**: 
+  - `Ctrl + Enter`: Traducir manualmente.
+  - `Ctrl + L`: Limpiar paneles de texto.
+- **🎨 Interfaz Adaptativa**: Diseño oscuro (Dark Mode) con **High DPI Awareness** para máxima nitidez en todas las pantallas.
+- **🚀 Rendimiento Optimizado**:
+  - **Cancelación en Vuelo**: Cancela hilos de traducción antiguos al seguir escribiendo para ahorrar CPU.
 
 ---
 
 ## 🚀 Instalación y Uso
 
 ### 1. Vía pipx (Recomendado)
-Para usar el traductor como una aplicación global en tu terminal:
+Para usar el traductor como una aplicación global en tu sistema:
 
 ```bash
 pipx install git+https://github.com/fiumgi/Fungi-Traductor.git
 ```
 
-Una vez instalado, simplemente escribe:
+Luego ejecuta desde cualquier lugar:
 ```bash
 fungi-traductor
 ```
@@ -65,17 +69,17 @@ El resultado aparecerá en la carpeta `dist/`.
 Fungi-Traductor/
 ├── fungi_traductor/          # Núcleo del paquete Python
 │   ├── assets/               # Recursos visuales (iconos, imágenes)
-│   ├── controller/           # Controlador principal (Lógica MVC)
-│   ├── model/                # Motores de traducción y voz
-│   ├── view/                 # Diseño de la interfaz (Tkinter)
+│   ├── controller/           # Controlador (Lógica de eventos)
+│   ├── model/                # Modelos de traducción, TTS y hints
+│   ├── view/                 # Interfaz gráfica (Tkinter)
 │   ├── __init__.py           # Inicializador de paquete
 │   └── __main__.py           # Punto de entrada para ejecución modular
-├── app.py                    # Wrapper para ejecución directa
-├── build_exe.bat             # Script de compilación (Windows)
-├── build_exe.sh              # Script de compilación (Linux)
+├── app.py                    # Script de inicio rápido (wrapper)
+├── build_exe.bat             # Script de construcción (Windows)
+├── build_exe.sh              # Script de construcción (Linux)
 ├── pyproject.toml            # Configuración de empaquetado y pipx
 ├── requirements.txt          # Dependencias del proyecto
-└── README.md                 # Documentación (este archivo)
+└── README.md                 # Documentación del proyecto
 ```
 
 ---
@@ -95,5 +99,5 @@ Este proyecto es posible gracias a la comunidad de código abierto:
 - [Argos Translate](https://github.com/argosopentech/argos-translate)
 - [langdetect](https://pypi.org/project/langdetect/)
 - [pyttsx3](https://github.com/nateshmbhat/pyttsx3)
-
+- [platformdirs](https://github.com/platformdirs/platformdirs)
 Desarrollado con Amor❤️ por **fiumgi**.
