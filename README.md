@@ -6,7 +6,7 @@ Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado p
 
 ---
 
-## ✨ Características Premium
+## ✨ Características
 
 - **🌐 100% Offline**: Privacidad garantizada. Tus textos nunca salen de tu equipo.
 - **📄 Soporte de Documentos**: Traduce archivos completos cargándolos con un clic.
