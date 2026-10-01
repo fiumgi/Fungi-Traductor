@@ -286,7 +286,7 @@ class TranslatorController:
 
         for candidate in candidates:
             try:
-                if candidate.is_file():
+                if candidate.is_file() and (os.name == "nt" or os.access(candidate, os.X_OK)):
                     return str(candidate)
             except OSError:
                 continue

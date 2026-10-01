@@ -105,6 +105,7 @@ def test_worker_loading_ocr_does_not_read_tk_widgets(controller):
 def test_tesseract_lookup_honors_explicit_environment_path(monkeypatch, tmp_path):
     executable = tmp_path / "custom-tesseract"
     executable.touch()
+    executable.chmod(0o755)
     monkeypatch.setenv("TESSERACT_CMD", str(executable))
     monkeypatch.setattr("fungi_traductor.controller.app_controller.shutil.which", lambda _: None)
 
