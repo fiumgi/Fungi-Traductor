@@ -32,13 +32,18 @@ Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado p
 Para usar el traductor como una aplicación global en tu sistema:
 
 ```bash
-pipx install git+https://github.com/fiumgi/Fungi-Traductor.git
+pipx install "fungi-traductor[all] @ git+https://github.com/fiumgi/Fungi-Traductor.git"
 ```
 
 Luego ejecuta desde cualquier lugar:
 ```bash
 fungi-traductor
 ```
+
+La opción `[all]` incluye las librerías para documentos e imágenes. Puedes omitirla
+si solo necesitas traducir texto. La primera instalación de cada par de idiomas
+requiere internet para descargar su modelo; una vez instalado, la traducción
+funciona sin conexión, incluso si falta el índice local de paquetes.
 
 ### 2. Para Desarrolladores (Código Fuente)
 1. Clona el repositorio:
@@ -54,6 +59,20 @@ fungi-traductor
    ```bash
    python app.py
    ```
+
+### 3. Pruebas de desarrollo
+
+```bash
+pip install -e ".[all,dev]"
+python -m pytest
+python -m mypy fungi_traductor
+```
+
+Las pruebas cubren arranque sin conexión, restauración de idiomas, cancelación,
+caché, documentos y controles de la interfaz. En Linux sin pantalla, ejecuta
+`xvfb-run -a python -m pytest` para incluir las pruebas gráficas; si no hay pantalla,
+esas pruebas se omiten. La suite usa un motor simulado y no descarga modelos.
+Tesseract y el dispositivo de audio se verifican por separado.
 
 ---
 
@@ -92,6 +111,9 @@ Fungi-Traductor/
 ## ⚠️ Requisitos y Solución de Problemas
 
 - **Python**: Versión 3.10 o superior.
+- **Exportación PDF**: para conservar caracteres fuera de los alfabetos occidentales
+  hace falta una fuente compatible. Si no está disponible, la aplicación avisa;
+  puedes guardar en TXT, DOCX u ODT para conservar el texto completo.
 
 Para que todas las funciones (OCR, documentos y voz) operen correctamente, es necesario instalar algunas dependencias a nivel de sistema que no pueden incluirse en el `requirements.txt`:
 

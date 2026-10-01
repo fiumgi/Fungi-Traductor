@@ -9,6 +9,7 @@ import sys
 import os
 from pathlib import Path
 from collections import OrderedDict
+from concurrent.futures import CancelledError
 from .hints import _SHORT_TEXT_EXACT_HINTS, _SHORT_TEXT_WORD_HINTS, _LANGUAGE_NAME_HINTS
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -60,9 +61,12 @@ class TranslatorModel:
         self.ready      = False
         self._available: list = []   # paquetes disponibles en el índice
         self._tts_voice_cache: list[dict] | None = None
-        self._tts_lock = threading.Lock()
+        self._tts_lock = threading.RLock()
         self._cache_lock = threading.Lock()
+        self._translation_lock = threading.Lock()
+        self._package_lock = threading.Lock()
         self._translation_cache: OrderedDict[tuple[str, str, str], str] = OrderedDict()
+        self._cache_chars = 0
 
     def _check_system_proxy(self):
         """Detecta si hay un proxy configurado en el sistema"""
@@ -83,6 +87,7 @@ class TranslatorModel:
         Descarga el índice de paquetes de Argos Translate.
         on_status(msg: str, level: str)  level ∈ {"info","warn","error","ok"}
         """
+        self.ready = False
         try:
             import argostranslate.package as pkg_mod
             import argostranslate.translate as trans_mod
@@ -113,42 +118,68 @@ class TranslatorModel:
 
         if on_progress:
             on_progress("init", 75, "Leyendo idiomas disponibles…")
-        self._available = pkg_mod.get_available_packages()
-        installed_count = len(pkg_mod.get_installed_packages())
+        try:
+            # Argos reintenta recursivamente si no existe el índice local.
+            index_path = getattr(getattr(pkg_mod, "settings", None), "local_package_index", None)
+            if index_path is not None and not Path(index_path).is_file():
+                raise FileNotFoundError("No hay un índice local de paquetes")
+            self._available = pkg_mod.get_available_packages()
+        except Exception as exc:
+            self._available = []
+            log.warning("No se pudo leer el índice de paquetes: %s", exc)
+            on_status("⚠ índice no disponible — usando paquetes locales", "warn")
+
+        try:
+            installed_count = len(pkg_mod.get_installed_packages())
+        except Exception as exc:
+            log.error("No se pudieron leer los paquetes instalados: %s", exc)
+            on_status(f"✗ error leyendo paquetes locales: {exc}", "error")
+            return False
         log.info(
             f"Índice cargado: {len(self._available)} disponibles, "
             f"{installed_count} instalados"
         )
         if on_progress:
             on_progress("init", 100, "Idiomas listos")
+        self.ready = True
         return True
+
+    @staticmethod
+    def _package_pairs(packages) -> list[tuple]:
+        result = []
+        for p in packages:
+            if getattr(p, "type", "translate") != "translate":
+                continue
+            if not getattr(p, "from_code", None) or not getattr(p, "to_code", None):
+                continue
+            fn = getattr(p, "from_name", None) or p.from_code
+            tn = getattr(p, "to_name", None) or p.to_code
+            result.append((p.from_code, p.to_code, fn, tn))
+        return result
 
     def available_pairs(self) -> list[tuple]:
         """Devuelve [(from_code, to_code, from_name, to_name), ...]"""
-        result = []
-        for p in self._available:
-            fn = getattr(p, "from_name", p.from_code)
-            tn = getattr(p, "to_name",   p.to_code)
-            result.append((p.from_code, p.to_code, fn, tn))
-        return result
+        return self._package_pairs(self._available)
 
     def installed_pairs(self) -> list[tuple]:
         if not self._pkg_mod:
             return []
-        result = []
-        for p in self._pkg_mod.get_installed_packages():
-            fn = getattr(p, "from_name", p.from_code)
-            tn = getattr(p, "to_name",   p.to_code)
-            result.append((p.from_code, p.to_code, fn, tn))
-        return result
+        return self._package_pairs(self._pkg_mod.get_installed_packages())
 
-    def ensure_pair(self, from_code: str, to_code: str, on_status, on_progress=None) -> bool:
+    def ensure_pair(self, from_code: str, to_code: str, on_status, on_progress=None,
+                    cancel_evt=None) -> bool:
         """Instala el par si no está instalado. Devuelve True si queda listo."""
+        with self._package_lock:
+            self._check_cancelled(cancel_evt)
+            return self._ensure_pair(from_code, to_code, on_status, on_progress)
+
+    def _ensure_pair(self, from_code, to_code, on_status, on_progress):
         if not self._pkg_mod:
             return False
 
         installed = self._pkg_mod.get_installed_packages()
-        if any(p.from_code == from_code and p.to_code == to_code
+        if any(getattr(p, "from_code", None) == from_code
+               and getattr(p, "to_code", None) == to_code
                for p in installed):
             if on_progress:
                 on_progress("install", 100, f"Paquete {from_code}→{to_code} ya instalado")
@@ -156,7 +187,8 @@ class TranslatorModel:
 
         pkg = next(
             (p for p in self._available
-             if p.from_code == from_code and p.to_code == to_code),
+             if getattr(p, "from_code", None) == from_code
+             and getattr(p, "to_code", None) == to_code),
             None,
         )
         if pkg is None:
@@ -198,56 +230,96 @@ class TranslatorModel:
 
     # ── Traducción ────────────────────────────────────────────────────────────
 
-    def translate(self, text: str, from_code: str, to_code: str, on_progress=None) -> str:
+    @staticmethod
+    def _check_cancelled(cancel_evt):
+        if cancel_evt is not None and cancel_evt.is_set():
+            raise CancelledError()
+
+    def _cache_translation(self, key, result):
+        """Limita tanto el número de entradas como el texto retenido en memoria."""
+        with self._cache_lock:
+            previous = self._translation_cache.pop(key, None)
+            if previous is not None:
+                self._cache_chars -= len(key[0]) + len(previous)
+            size = len(key[0]) + len(result)
+            if size <= 2_000_000:
+                self._translation_cache[key] = result
+                self._cache_chars += size
+            max_entries = 50 if len(key[0]) > 1000 else 200
+            while self._translation_cache and (
+                    len(self._translation_cache) > max_entries or self._cache_chars > 2_000_000):
+                old_key, old_result = self._translation_cache.popitem(last=False)
+                self._cache_chars -= len(old_key[0]) + len(old_result)
+
+    @staticmethod
+    def _translation_chunks(text: str, max_chars: int = 3000):
+        """Separa líneas y párrafos largos conservando sus espacios y saltos."""
+        chunks = []
+        for line in re.split(r"(\r\n|\r|\n)", text):
+            while len(line) > max_chars and line.strip():
+                window = line[:max_chars + 1]
+                boundaries = list(re.finditer(r"[.!?。！？](\s+)", window))
+                if boundaries:
+                    boundary = boundaries[-1]
+                    end, next_start = boundary.start(1), boundary.end(1)
+                else:
+                    spaces = [match for match in re.finditer(r"\s+", window) if match.start() > 0]
+                    if spaces:
+                        boundary = spaces[-1]
+                        end, next_start = boundary.start(), boundary.end()
+                    else:
+                        end = next_start = max_chars
+                chunks.append((line[:end], True))
+                if next_start > end:
+                    chunks.append((line[end:next_start], False))
+                line = line[next_start:]
+            if line:
+                chunks.append((line, bool(line.strip())))
+        return chunks
+
+    def translate(self, text: str, from_code: str, to_code: str, on_progress=None,
+                  cancel_evt=None) -> str:
         trans_mod = self._trans_mod
         if not trans_mod:
             raise RuntimeError("Modelo no inicializado")
 
-        def _get_cached_or_translate(txt):
-            key = (txt, from_code, to_code)
+        self._check_cancelled(cancel_evt)
+        # Evitar que varias solicitudes ejecuten el motor a la vez.
+        with self._translation_lock:
+            self._check_cancelled(cancel_evt)
+            cache_key = (text, from_code, to_code)
             with self._cache_lock:
-                if key in self._translation_cache:
-                    self._translation_cache.move_to_end(key)
-                    return self._translation_cache[key]
-            
-            res = trans_mod.translate(txt, from_code, to_code)
-            # Límite adaptativo: textos largos consumen mucha más memoria
-            max_cache = 50 if len(txt) > 1000 else 200
-            with self._cache_lock:
-                self._translation_cache[key] = res
-                if len(self._translation_cache) > max_cache:
-                    self._translation_cache.popitem(last=False)
-            return res
+                if cache_key in self._translation_cache:
+                    self._translation_cache.move_to_end(cache_key)
+                    return self._translation_cache[cache_key]
 
-        # Intentar match exacto primero
-        cache_key = (text, from_code, to_code)
-        with self._cache_lock:
-            if cache_key in self._translation_cache:
-                log.info(f"Caché hit: {len(text)} chars {from_code}→{to_code}")
-                self._translation_cache.move_to_end(cache_key)
-                return self._translation_cache[cache_key]
+            chunks = self._translation_chunks(text) if len(text) > 3000 else [(text, bool(text.strip()))]
+            total = sum(translate for _, translate in chunks)
+            completed = 0
+            results = []
+            for chunk, should_translate in chunks:
+                self._check_cancelled(cancel_evt)
+                if not should_translate:
+                    results.append(chunk)
+                    continue
+                key = (chunk, from_code, to_code)
+                with self._cache_lock:
+                    translated = self._translation_cache.get(key)
+                    if translated is not None:
+                        self._translation_cache.move_to_end(key)
+                if translated is None:
+                    translated = trans_mod.translate(chunk, from_code, to_code)
+                    self._check_cancelled(cancel_evt)
+                    self._cache_translation(key, translated)
+                results.append(translated)
+                completed += 1
+                if on_progress:
+                    on_progress("translate", int(completed / total * 100),
+                                f"Traduciendo fragmento {completed}/{total}…")
+            self._check_cancelled(cancel_evt)
+            result = "".join(results)
+            self._cache_translation(cache_key, result)
 
-        # Chunking para textos largos (>3000 caracteres)
-        if len(text) > 3000:
-            paragraphs = [p for p in text.split('\n') if p.strip()]
-            if len(paragraphs) > 1:
-                results = []
-                total = len(paragraphs)
-                for i, p in enumerate(paragraphs):
-                    if on_progress:
-                        on_progress("translate", int((i / total) * 100), f"Traduciendo párrafo {i+1}/{total}…")
-                    results.append(_get_cached_or_translate(p))
-                result = "\n\n".join(results)
-            else:
-                result = _get_cached_or_translate(text)
-        else:
-            result = _get_cached_or_translate(text)
-
-        # Guardar también el texto completo en cache si no estaba
-        with self._cache_lock:
-            if cache_key not in self._translation_cache:
-                self._translation_cache[cache_key] = result
-        
         log.info(f"Traducidos {len(text)} chars  {from_code}→{to_code} (Guardado en caché)")
         return result
 
@@ -273,7 +345,7 @@ class TranslatorModel:
                 if self._is_detection_ambiguous(normalized, best.prob):
                     log.info(f"Detección ambigua para texto corto: {langs}")
                     return None
-                code = best.lang
+                code = {"zh-cn": "zh", "zh-tw": "zt"}.get(best.lang, best.lang)
 
             log.info(f"Idioma detectado: {code}")
             return code
@@ -335,10 +407,11 @@ class TranslatorModel:
         )
         return [(voice["id"], voice["label"]) for voice in ranked]
 
-    def speak(self, text: str, lang: str = "es", voice_id: str | None = None):
+    def speak(self, text: str, lang: str = "es", voice_id: str | None = None, on_status=None):
         """Reproduce el texto en voz alta en un hilo separado."""
         def _run():
             with self._tts_lock:
+                engine = None
                 try:
                     import pyttsx3
                     engine = pyttsx3.init()
@@ -348,19 +421,36 @@ class TranslatorModel:
                         engine.setProperty("voice", chosen_voice_id)
                     engine.say(text)
                     engine.runAndWait()
-                    engine.stop()
                     log.info(
                         f"TTS: {len(text)} chars en idioma '{lang}' "
                         f"con voz '{chosen_voice_id or 'automática'}'"
                     )
+                    if on_status:
+                        on_status("● lectura terminada", "ok")
                 except ImportError:
                     log.error("pyttsx3 no instalado — ejecuta: pip install pyttsx3")
+                    if on_status:
+                        on_status("✗ pyttsx3 no instalado", "error")
                 except Exception as exc:
                     log.error(f"Error en TTS: {exc}")
+                    if on_status:
+                        on_status(f"✗ error TTS: {exc}", "error")
+                finally:
+                    if engine is not None:
+                        try:
+                            engine.stop()
+                        except Exception as exc:
+                            log.warning("No se pudo detener el motor de voz: %s", exc)
 
-        threading.Thread(target=_run, daemon=True).start()
+        worker = threading.Thread(target=_run, daemon=True)
+        worker.start()
+        return worker
 
     def _load_tts_voices(self) -> list[dict]:
+        with self._tts_lock:
+            return self._load_tts_voices_locked()
+
+    def _load_tts_voices_locked(self) -> list[dict]:
         # Reutilizar cache si ya está cargado
         if self._tts_voice_cache is not None:
             return self._tts_voice_cache

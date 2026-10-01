@@ -13,11 +13,12 @@ dependencies = [
     "argostranslate>=1.9.0",
     "langdetect>=1.0.9",
     "pyttsx3>=2.90",
+    "platformdirs>=4.0.0",
 ]
 
 [project.optional-dependencies]
 docs = [
-    "pymupdf>=1.23.0",
+    "pymupdf>=1.24.0",
     "python-docx>=1.1.0",
     "odfpy>=1.4.1",
     "fpdf2>=2.7.0",
@@ -27,8 +28,16 @@ ocr = [
     "Pillow>=10.0.0",
 ]
 all = [
-    "fungi-traductor[docs,ocr]",
-    "platformdirs>=4.0.0",
+    "pymupdf>=1.24.0",
+    "python-docx>=1.1.0",
+    "odfpy>=1.4.1",
+    "fpdf2>=2.7.0",
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0.0",
+]
+dev = [
+    "pytest>=8.0",
+    "mypy>=1.10",
 ]
 
 [project.scripts]
@@ -49,6 +58,10 @@ ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [[tool.mypy.overrides]]
 module = [
