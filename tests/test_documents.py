@@ -1,3 +1,5 @@
+import sys
+from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -87,19 +89,23 @@ def test_opening_a_file_does_not_read_it_on_the_tk_thread(controller, tmp_path):
 
 
 def test_worker_loading_ocr_does_not_read_tk_widgets(controller):
-    pytesseract = pytest.importorskip("pytesseract")
-    image = pytest.importorskip("PIL.Image")
     controller.view.get_from_code = Mock(
         side_effect=lambda: (_ for _ in ()).throw(AssertionError("Tk access from a worker"))
     )
     fake_image = Mock()
     fake_image.__enter__ = Mock(return_value=fake_image)
     fake_image.__exit__ = Mock()
+    pytesseract = ModuleType("pytesseract")
+    pytesseract.pytesseract = SimpleNamespace(tesseract_cmd=None)
+    pytesseract.image_to_string = Mock(return_value="hello")
+    image = ModuleType("PIL.Image")
+    image.open = Mock(return_value=fake_image)
+    pil = ModuleType("PIL")
+    pil.Image = image
     with patch.object(controller, "_find_tesseract", return_value="tesseract"), \
-            patch.object(image, "open", return_value=fake_image), \
-            patch.object(pytesseract, "image_to_string", return_value="hello") as ocr:
+            patch.dict(sys.modules, {"pytesseract": pytesseract, "PIL": pil, "PIL.Image": image}):
         assert controller._extract_image_ocr("input.png", src_code="en") == "hello"
-    ocr.assert_called_once_with(fake_image, lang="eng")
+    pytesseract.image_to_string.assert_called_once_with(fake_image, lang="eng")
 
 
 def test_tesseract_lookup_honors_explicit_environment_path(monkeypatch, tmp_path):
@@ -113,11 +119,15 @@ def test_tesseract_lookup_honors_explicit_environment_path(monkeypatch, tmp_path
 
 
 def test_ocr_reports_missing_tesseract(controller, monkeypatch):
-    pytest.importorskip("pytesseract")
-    pytest.importorskip("PIL.Image")
+    pytesseract = ModuleType("pytesseract")
+    pytesseract.pytesseract = SimpleNamespace(tesseract_cmd=None)
+    image = ModuleType("PIL.Image")
+    pil = ModuleType("PIL")
+    pil.Image = image
     monkeypatch.setattr(controller, "_find_tesseract", lambda: None)
 
-    assert controller._extract_image_ocr("input.png", src_code="en") is None
+    with patch.dict(sys.modules, {"pytesseract": pytesseract, "PIL": pil, "PIL.Image": image}):
+        assert controller._extract_image_ocr("input.png", src_code="en") is None
     controller._drain_ui_queue()
     controller.view.set_status.assert_any_call(
         "✗ Tesseract no está instalado o no está en PATH; configura TESSERACT_CMD",
