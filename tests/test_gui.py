@@ -12,8 +12,10 @@ def view():
     try:
         view = TranslatorView()
     except tk.TclError as exc:
-        if "display" in str(exc).lower():
-            pytest.skip("Tk requires a display; run the GUI tests with Xvfb")
+        message = str(exc).lower()
+        if any(fragment in message for fragment in (
+                "display", "usable tk", "tk.tcl", "couldn't read file")):
+            pytest.skip("Tk runtime is unavailable in this environment")
         raise
     view.update()
     yield view

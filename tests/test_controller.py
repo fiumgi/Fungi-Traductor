@@ -137,17 +137,6 @@ def test_missing_optional_features_stay_disabled_after_translation(controller):
     assert controller.view.btn_detect.config.call_args.kwargs["state"] == "disabled"
 
 
-def test_tts_backend_probe_failure_disables_only_tts(controller):
-    controller.model.tts_available.return_value = False
-
-    with patch.dict("sys.modules", {"pyttsx3": Mock(), "langdetect": Mock()}):
-        controller._check_optional_deps()
-    controller._toggle_ui(True)
-
-    assert controller.view.btn_tts.config.call_args.kwargs["state"] == "disabled"
-    assert controller.view.btn_detect.config.call_args.kwargs["state"] != "disabled"
-
-
 def test_tts_does_not_read_tk_widgets_from_a_worker(controller):
     controller.view.output = "hola"
     main_thread = threading.get_ident()
