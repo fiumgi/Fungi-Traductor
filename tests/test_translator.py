@@ -9,6 +9,22 @@ import pytest
 from fungi_traductor.model.translator import TranslatorModel
 
 
+class InlineThread:
+    """Worker controlable para probar TTS sin depender de runtimes COM/audio."""
+
+    def __init__(self, target, daemon=True):
+        self._target = target
+
+    def start(self):
+        self._target()
+
+    def join(self, timeout=None):
+        return None
+
+    def is_alive(self):
+        return False
+
+
 @pytest.fixture
 def model():
     model = TranslatorModel()
@@ -179,6 +195,7 @@ def test_tts_reports_backend_failures_to_the_interface(model, monkeypatch):
     engine.runAndWait.side_effect = RuntimeError("No audio driver")
     pyttsx3 = SimpleNamespace(init=Mock(return_value=engine))
     monkeypatch.setitem(__import__("sys").modules, "pyttsx3", pyttsx3)
+    monkeypatch.setattr("fungi_traductor.model.translator.threading.Thread", InlineThread)
     model._tts_voice_cache = []
     status = Mock()
     worker = model.speak("hello", "en", on_status=status)
@@ -195,6 +212,7 @@ def test_tts_completes_when_voices_have_not_been_loaded_yet(model, monkeypatch):
     ]
     monkeypatch.setitem(__import__("sys").modules, "pyttsx3",
                         SimpleNamespace(init=Mock(return_value=engine)))
+    monkeypatch.setattr("fungi_traductor.model.translator.threading.Thread", InlineThread)
     status = Mock()
     worker = model.speak("hello", "en", on_status=status)
     worker.join(timeout=5)
