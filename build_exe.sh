@@ -2,6 +2,9 @@
 # Fungi Traductor — Build Script for Linux
 set -e
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo "============================================"
 echo " 🍄 Fungi Traductor — Build System (Linux)"
 echo "============================================"
@@ -13,18 +16,17 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # 1. Entorno Virtual
-if [ -d "venv" ]; then
-    echo "[INFO] Activando entorno virtual..."
-    source venv/bin/activate
-else
-    echo "[WARN] No se encontró la carpeta venv/. Se usará el Python del sistema."
+if [ ! -f "venv/bin/activate" ]; then
+    echo "[INFO] Creando entorno virtual en venv/..."
+    python3 -m venv venv
 fi
+echo "[INFO] Activando entorno virtual..."
+source venv/bin/activate
+PYTHON_BIN="python"
 
-# 2. Verificar/Instalar PyInstaller
-if ! python3 -m pip show pyinstaller &>/dev/null; then
-    echo "[INFO] Instalando PyInstaller..."
-    python3 -m pip install pyinstaller
-fi
+# 2. Instalar y verificar todas las dependencias del proyecto
+echo "[INFO] Verificando dependencias del proyecto..."
+"$PYTHON_BIN" -m pip install -r requirements.txt
 
 # 3. Limpieza previa
 echo "[INFO] Limpiando builds anteriores..."
@@ -32,7 +34,7 @@ rm -rf build dist FungiTraductor.spec
 
 # 4. Compilación
 echo "[INFO] Iniciando empaquetado (esto puede tardar)..."
-python3 -m PyInstaller \
+"$PYTHON_BIN" -m PyInstaller \
   --onefile \
   --windowed \
   --name "FungiTraductor" \
@@ -52,6 +54,7 @@ python3 -m PyInstaller \
   --collect-all fitz \
   --collect-all docx \
   --collect-all fpdf \
+  --collect-all odf \
   --add-data "fungi_traductor/assets:fungi_traductor/assets" \
   --clean \
   app.py

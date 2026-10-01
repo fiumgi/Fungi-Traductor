@@ -120,6 +120,10 @@ Para que todas las funciones (OCR, documentos y voz) operen correctamente, es ne
 ### 1. Tesseract OCR (Para traducción de imágenes)
 La librería `pytesseract` es solo un conector; necesitas el motor oficial en tu sistema:
 
+La aplicación busca `tesseract` en el `PATH` y en las rutas de instalación habituales.
+Si lo instalas en otra ubicación, define `TESSERACT_CMD` con la ruta completa al
+ejecutable antes de iniciar la aplicación.
+
 - **Debian / Ubuntu / Mint / Kali**:
   ```bash
   sudo apt update
@@ -138,7 +142,7 @@ La librería `pytesseract` es solo un conector; necesitas el motor oficial en tu
 ### 2. Otras dependencias (Linux)
 Si experimentas errores con la interfaz gráfica o la voz:
 - **Tkinter**: `sudo apt install python3-tk`
-- **Voz (TTS)**: `sudo apt install espeak` o `libespeak1`
+- **Voz (TTS)**: `sudo apt install espeak espeak-ng` o `libespeak1`
 
 ---
 

@@ -2,6 +2,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from fungi_traductor.controller.app_controller import TranslatorController
+
 
 def test_odt_import_keeps_headings_and_paragraph_boundaries(controller, tmp_path):
     pytest.importorskip("odf")
@@ -93,10 +95,33 @@ def test_worker_loading_ocr_does_not_read_tk_widgets(controller):
     fake_image = Mock()
     fake_image.__enter__ = Mock(return_value=fake_image)
     fake_image.__exit__ = Mock()
-    with patch.object(image, "open", return_value=fake_image), \
+    with patch.object(controller, "_find_tesseract", return_value="tesseract"), \
+            patch.object(image, "open", return_value=fake_image), \
             patch.object(pytesseract, "image_to_string", return_value="hello") as ocr:
         assert controller._extract_image_ocr("input.png", src_code="en") == "hello"
     ocr.assert_called_once_with(fake_image, lang="eng")
+
+
+def test_tesseract_lookup_honors_explicit_environment_path(monkeypatch, tmp_path):
+    executable = tmp_path / "custom-tesseract"
+    executable.touch()
+    monkeypatch.setenv("TESSERACT_CMD", str(executable))
+    monkeypatch.setattr("fungi_traductor.controller.app_controller.shutil.which", lambda _: None)
+
+    assert TranslatorController._find_tesseract() == str(executable)
+
+
+def test_ocr_reports_missing_tesseract(controller, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL.Image")
+    monkeypatch.setattr(controller, "_find_tesseract", lambda: None)
+
+    assert controller._extract_image_ocr("input.png", src_code="en") is None
+    controller._drain_ui_queue()
+    controller.view.set_status.assert_any_call(
+        "✗ Tesseract no está instalado o no está en PATH; configura TESSERACT_CMD",
+        "error",
+    )
 
 
 def test_export_with_an_unknown_extension_reports_the_actual_format(controller, tmp_path):

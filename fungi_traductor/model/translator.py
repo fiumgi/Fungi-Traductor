@@ -62,6 +62,7 @@ class TranslatorModel:
         self._available: list = []   # paquetes disponibles en el índice
         self._tts_voice_cache: list[dict] | None = None
         self._tts_lock = threading.RLock()
+        self._tts_available: bool | None = None
         self._cache_lock = threading.Lock()
         self._translation_lock = threading.Lock()
         self._package_lock = threading.Lock()
@@ -445,6 +446,21 @@ class TranslatorModel:
         worker = threading.Thread(target=_run, daemon=True)
         worker.start()
         return worker
+
+    def tts_available(self) -> bool:
+        """Comprueba una vez que pyttsx3 puede inicializar su backend del sistema."""
+        with self._tts_lock:
+            if self._tts_available is not None:
+                return self._tts_available
+            try:
+                import pyttsx3
+                engine = pyttsx3.init()
+                engine.stop()
+                self._tts_available = True
+            except Exception as exc:
+                log.warning("Backend TTS no disponible: %s", exc)
+                self._tts_available = False
+            return self._tts_available
 
     def _load_tts_voices(self) -> list[dict]:
         with self._tts_lock:

@@ -1,6 +1,7 @@
 from concurrent.futures import CancelledError
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
+import sys
 import threading
 
 import pytest
@@ -201,3 +202,23 @@ def test_tts_completes_when_voices_have_not_been_loaded_yet(model, monkeypatch):
     status.assert_called_once_with("● lectura terminada", "ok")
     engine.say.assert_called_once_with("hello")
     engine.setProperty.assert_any_call("voice", "english")
+
+
+def test_tts_available_caches_successful_backend_probe(model, monkeypatch):
+    engine = Mock()
+    init = Mock(return_value=engine)
+    monkeypatch.setitem(sys.modules, "pyttsx3", SimpleNamespace(init=init))
+
+    assert model.tts_available()
+    assert model.tts_available()
+    init.assert_called_once_with()
+    engine.stop.assert_called_once_with()
+
+
+def test_tts_available_caches_backend_failure(model, monkeypatch):
+    init = Mock(side_effect=RuntimeError("No audio driver"))
+    monkeypatch.setitem(sys.modules, "pyttsx3", SimpleNamespace(init=init))
+
+    assert not model.tts_available()
+    assert not model.tts_available()
+    init.assert_called_once_with()

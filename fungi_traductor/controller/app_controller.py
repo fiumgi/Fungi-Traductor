@@ -1,5 +1,7 @@
 import threading
 import logging
+import os
+import shutil
 from queue import Empty, Queue
 from threading import Lock
 from collections import defaultdict
@@ -206,12 +208,20 @@ class TranslatorController:
         # 1. Verificar TTS (pyttsx3)
         try:
             import pyttsx3
+            tts_probe = getattr(self.model, "tts_available", None)
+            if callable(tts_probe) and not tts_probe():
+                raise RuntimeError("el backend de audio no está disponible")
             self._optional_features["btn_tts"] = True
         except ImportError:
             self._optional_features["btn_tts"] = False
             self.view.set_button_enabled("btn_tts", False)
             self.view.set_tooltip("btn_tts", "Falta pyttsx3: pip install pyttsx3")
             logger.warning("TTS deshabilitado: pyttsx3 no instalado")
+        except Exception as exc:
+            self._optional_features["btn_tts"] = False
+            self.view.set_button_enabled("btn_tts", False)
+            self.view.set_tooltip("btn_tts", f"TTS no disponible: {exc}")
+            logger.warning("TTS deshabilitado: %s", exc)
 
         # 2. Verificar Detección (langdetect)
         try:
@@ -240,6 +250,8 @@ class TranslatorController:
         try:
             import pytesseract
             import PIL
+            if self._find_tesseract() is None:
+                missing_formats.append("Imágenes (falta el ejecutable Tesseract)")
         except ImportError:
             missing_formats.append("Imágenes (OCR)")
 
@@ -247,6 +259,38 @@ class TranslatorController:
             msg = f"Soporte limitado. Faltan: {', '.join(missing_formats)}"
             self.view.set_tooltip("btn_open", msg)
             logger.info(f"Soporte de archivos limitado: faltan {missing_formats}")
+
+    @staticmethod
+    def _find_tesseract() -> str | None:
+        """Encuentra Tesseract en PATH, en una ruta configurada o en rutas comunes."""
+        configured = os.environ.get("TESSERACT_CMD")
+        candidates = []
+        if configured:
+            candidates.append(Path(configured))
+
+        executable = shutil.which(configured or "tesseract")
+        if executable:
+            candidates.append(Path(executable))
+
+        if os.name == "nt":
+            for variable in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+                root = os.environ.get(variable)
+                if root:
+                    candidates.append(Path(root) / "Tesseract-OCR" / "tesseract.exe")
+        else:
+            candidates.extend([
+                Path("/usr/bin/tesseract"),
+                Path("/usr/local/bin/tesseract"),
+                Path("/snap/bin/tesseract"),
+            ])
+
+        for candidate in candidates:
+            try:
+                if candidate.is_file():
+                    return str(candidate)
+            except OSError:
+                continue
+        return None
 
     def _get_config_path(self) -> Path:
         """Determina la ruta del archivo de configuración usando platformdirs."""
@@ -810,6 +854,14 @@ class TranslatorController:
         try:
             import pytesseract
             from PIL import Image
+
+            tesseract = self._find_tesseract()
+            if tesseract is None:
+                self._set_status(
+                    "✗ Tesseract no está instalado o no está en PATH; "
+                    "configura TESSERACT_CMD", "error")
+                return None
+            pytesseract.pytesseract.tesseract_cmd = tesseract
 
             # Detectar idioma origen para mejorar precisión del OCR
             if src_code is None:

@@ -1,23 +1,38 @@
 @echo off
 setlocal enabledelayedexpansion
 
+cd /d "%~dp0"
+if errorlevel 1 (
+    echo [ERROR] No se pudo acceder al directorio del proyecto.
+    exit /b 1
+)
+
 echo ============================================
 echo  🍄 Fungi Traductor — Build System (Win)
 echo ============================================
 
 :: 1. Entorno Virtual
-if exist venv\Scripts\activate.bat (
-    echo [INFO] Activando entorno virtual...
-    call venv\Scripts\activate.bat
-) else (
-    echo [WARN] No se encontro venv\, se usara el Python global.
+if not exist venv\Scripts\python.exe (
+    echo [INFO] Creando entorno virtual en venv\...
+    python -m venv venv
+    if errorlevel 1 (
+        echo [ERROR] No se pudo crear el entorno virtual.
+        exit /b 1
+    )
+)
+echo [INFO] Activando entorno virtual...
+call venv\Scripts\activate.bat
+if errorlevel 1 (
+    echo [ERROR] No se pudo activar el entorno virtual.
+    exit /b 1
 )
 
-:: 2. Verificar/Instalar PyInstaller
-python -m pip show pyinstaller >nul 2>&1
+:: 2. Instalar y verificar todas las dependencias del proyecto
+echo [INFO] Verificando dependencias del proyecto...
+python -m pip install -r requirements.txt
 if errorlevel 1 (
-    echo [INFO] Instalando PyInstaller...
-    python -m pip install pyinstaller
+    echo [ERROR] No se pudieron instalar las dependencias.
+    exit /b 1
 )
 
 :: 3. Limpieza previa
@@ -50,6 +65,7 @@ python -m PyInstaller ^
   --collect-all fitz ^
   --collect-all docx ^
   --collect-all fpdf ^
+  --collect-all odf ^
   --add-data "fungi_traductor/assets;fungi_traductor/assets" ^
   --clean ^
   app.py
