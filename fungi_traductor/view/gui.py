@@ -149,14 +149,14 @@ class TranslatorView(tk.Tk):
 
         # Vincular eventos de teclado para mayor rapidez
         self.bind('<Control-Return>', lambda e: self._trigger_translate())
-        self.bind('<Control-l>', lambda e: self.btn_clear.invoke())
+        self.bind('<Control-l>', lambda e: self._trigger_clear())
 
         # También vincular directamente al widget de texto para asegurar que
         # funcione con foco
         self.input_text.bind(
             '<Control-Return>',
             lambda e: self._trigger_translate())
-        self.input_text.bind('<Control-l>', lambda e: self.btn_clear.invoke())
+        self.input_text.bind('<Control-l>', lambda e: self._trigger_clear())
 
         self.protocol("WM_DELETE_WINDOW", self._on_close_clicked)
         self._on_close_callback = None
@@ -221,6 +221,11 @@ class TranslatorView(tk.Tk):
         """Trigger para traducción vía teclado"""
         if hasattr(self, 'btn_translate'):
             self.btn_translate.invoke()
+        return "break"
+
+    def _trigger_clear(self):
+        self.btn_clear.invoke()
+        return "break"
 
     def _build_header(self):
         f = tk.Frame(self, bg=BG, pady=16)
@@ -471,38 +476,29 @@ class TranslatorView(tk.Tk):
 
     def set_loading(self, active: bool, mode: Literal["determinate", "indeterminate"] = "indeterminate",
                     value: float | None = None, detail: str = ""):
-        """Versión optimizada: evita cambios innecesarios"""
-        if active == self._loading_active:
-            # Solo actualizar detalles si está activo
-            if active:
-                self.progress_track.configure(mode=mode)
-                self.progress_detail_lbl.config(text=detail)
-                if mode != "indeterminate":
-                    progress_value = 0 if value is None else value
-                    self.progress_track.configure(
-                        value=progress_value, maximum=100)
-            return
-
+        """Actualiza progreso y detiene la animación al cambiar de modo."""
+        was_active = self._loading_active
+        previous_mode = str(self.progress_track["mode"])
         self._loading_active = active
-        self.progress_track.configure(mode=mode)
         self.progress_detail_lbl.config(text=detail)
 
         if active:
-            if not self.progress_row.winfo_ismapped():
+            if not was_active:
                 self.progress_row.grid()
-            if mode == "indeterminate":
-                self.progress_track.start(10)
-            else:
-                progress_value = 0 if value is None else value
+            if not was_active or previous_mode != mode:
                 self.progress_track.stop()
+                self.progress_track.configure(mode=mode)
+                if mode == "indeterminate":
+                    self.progress_track.start(10)
+            if mode == "determinate":
+                progress_value = 0 if value is None else value
                 self.progress_track.configure(
                     value=progress_value, maximum=100)
         else:
             self.progress_track.stop()
             self.progress_track.configure(value=0, maximum=100)
             self.progress_detail_lbl.config(text="")
-            if self.progress_row.winfo_ismapped():
-                self.progress_row.grid_remove()
+            self.progress_row.grid_remove()
 
     def set_auto(self, enabled: bool):
         if enabled:
@@ -548,7 +544,8 @@ class TranslatorView(tk.Tk):
     def set_input(self, text: str):
         """Establece el texto en el panel de entrada y maneja el placeholder."""
         self.input_text.delete("1.0", "end")
-        if text:
+        focused = self.focus_get() is self.input_text
+        if text or focused:
             self.input_text.insert("1.0", text)
             self.input_text.config(fg=TEXT)
             self._input_placeholder_active = False
@@ -616,15 +613,15 @@ class TranslatorView(tk.Tk):
 
     def set_char_count(self, count: int):
         """Actualiza el contador de caracteres en la parte inferior"""
-        if count > 4500:
-            color = ERR
-            label = f"{count} / 5000 — cerca del límite"
+        if count > 5000:
+            color = WARN
+            label = f"{count} caracteres · texto largo"
         elif count > 3000:
             color = WARN
-            label = f"{count} / 5000 — traducción por párrafos"
+            label = f"{count} caracteres · traducción por fragmentos"
         else:
             color = SUBTEXT
-            label = f"{count} / 5000"
+            label = f"{count} caracteres"
         self.char_lbl.config(text=label, fg=color)
 
     def populate_from(self, items: list[tuple[str, str]]):
@@ -711,7 +708,7 @@ class TranslatorView(tk.Tk):
         """Habilita o deshabilita un botón por su nombre."""
         btn = getattr(self, button_name, None)
         if btn and isinstance(btn, tk.Button):
-            state = "normal" if enabled else "disabled"
+            state: Literal["normal", "disabled"] = "normal" if enabled else "disabled"
             btn.config(state=state)
             if not enabled:
                 # Cambiar cursor si está deshabilitado para feedback visual claro

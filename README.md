@@ -32,13 +32,18 @@ Traductor offline de alto rendimiento con interfaz gráfica moderna, diseñado p
 Para usar el traductor como una aplicación global en tu sistema:
 
 ```bash
-pipx install git+https://github.com/fiumgi/Fungi-Traductor.git
+pipx install "fungi-traductor[all] @ git+https://github.com/fiumgi/Fungi-Traductor.git"
 ```
 
 Luego ejecuta desde cualquier lugar:
 ```bash
 fungi-traductor
 ```
+
+La opción `[all]` incluye las librerías para documentos e imágenes. Puedes omitirla
+si solo necesitas traducir texto. La primera instalación de cada par de idiomas
+requiere internet para descargar su modelo; una vez instalado, la traducción
+funciona sin conexión, incluso si falta el índice local de paquetes.
 
 ### 2. Para Desarrolladores (Código Fuente)
 1. Clona el repositorio:
@@ -55,16 +60,38 @@ fungi-traductor
    python app.py
    ```
 
+### 3. Pruebas de desarrollo
+
+```bash
+pip install -e ".[all,dev]"
+python -m pytest
+python -m mypy fungi_traductor
+```
+
+Las pruebas cubren arranque sin conexión, restauración de idiomas, cancelación,
+caché, documentos y controles de la interfaz. En Linux sin pantalla, ejecuta
+`xvfb-run -a python -m pytest` para incluir las pruebas gráficas; si no hay pantalla,
+esas pruebas se omiten. La suite usa un motor simulado y no descarga modelos.
+Tesseract y el dispositivo de audio se verifican por separado.
+
 ---
 
 ## 🛠️ Creación de Ejecutables (Build)
 
 Si prefieres generar un archivo `.exe` o un binario de Linux que no requiera instalar Python:
 
-- **Windows**: Ejecuta el archivo `build_exe.bat`.
+- **Windows**: Ejecuta el archivo `build_exe.bat`. Genera el portable
+  `dist/FungiTraductor.exe` y, si Inno Setup 6 está instalado, el instalador
+  `dist/FungiTraductor-Setup.exe`. El instalador permite elegir la carpeta,
+  crea accesos directos y añade el desinstalador.
 - **Linux**: Ejecuta `./build_exe.sh` (asegúrate de darle permisos: `chmod +x build_exe.sh`).
 
 El resultado aparecerá en la carpeta `dist/`.
+
+Para generar el instalador Windows localmente, instala [Inno Setup 6](https://jrsoftware.org/isinfo.php)
+y vuelve a ejecutar `build_exe.bat`. Si no instalas Inno Setup, el ejecutable
+portable seguirá disponible. En GitHub Actions, el job `windows-package` publica
+ambos archivos como artefacto descargable en cada `push`.
 
 ---
 
@@ -82,6 +109,7 @@ Fungi-Traductor/
 ├── app.py                    # Wrapper de inicio rápido
 ├── build_exe.bat             # Compilador (Windows)
 ├── build_exe.sh              # Compilador (Linux)
+├── installer.iss              # Configuración del instalador Windows
 ├── pyproject.toml            # Configuración de empaquetado y pipx
 ├── requirements.txt          # Dependencias del proyecto
 └── README.md                 # Documentación del proyecto
@@ -92,11 +120,18 @@ Fungi-Traductor/
 ## ⚠️ Requisitos y Solución de Problemas
 
 - **Python**: Versión 3.10 o superior.
+- **Exportación PDF**: para conservar caracteres fuera de los alfabetos occidentales
+  hace falta una fuente compatible. Si no está disponible, la aplicación avisa;
+  puedes guardar en TXT, DOCX u ODT para conservar el texto completo.
 
 Para que todas las funciones (OCR, documentos y voz) operen correctamente, es necesario instalar algunas dependencias a nivel de sistema que no pueden incluirse en el `requirements.txt`:
 
 ### 1. Tesseract OCR (Para traducción de imágenes)
 La librería `pytesseract` es solo un conector; necesitas el motor oficial en tu sistema:
+
+La aplicación busca `tesseract` en el `PATH` y en las rutas de instalación habituales.
+Si lo instalas en otra ubicación, define `TESSERACT_CMD` con la ruta completa al
+ejecutable antes de iniciar la aplicación.
 
 - **Debian / Ubuntu / Mint / Kali**:
   ```bash
@@ -116,7 +151,7 @@ La librería `pytesseract` es solo un conector; necesitas el motor oficial en tu
 ### 2. Otras dependencias (Linux)
 Si experimentas errores con la interfaz gráfica o la voz:
 - **Tkinter**: `sudo apt install python3-tk`
-- **Voz (TTS)**: `sudo apt install espeak` o `libespeak1`
+- **Voz (TTS)**: `sudo apt install espeak espeak-ng` o `libespeak1`
 
 ---
 

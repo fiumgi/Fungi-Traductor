@@ -1,0 +1,73 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install GUI runtime
+        run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk
+      - name: Install test dependencies
+        run: >-
+          python -m pip install pytest mypy langdetect pyttsx3 platformdirs
+          pymupdf python-docx odfpy fpdf2 pytesseract Pillow
+      - name: Compile application
+        run: python -m compileall -q fungi_traductor app.py
+      - name: Run regression tests including Tk
+        run: xvfb-run -a python -m pytest --tb=short
+      - name: Check types
+        run: python -m mypy fungi_traductor
+
+  windows-compatibility:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install -e . --no-deps
+          python -m pip install pytest mypy langdetect pyttsx3 platformdirs pymupdf python-docx odfpy fpdf2 pytesseract Pillow pyinstaller
+      - name: Compile application and build tools
+        run: |
+          python -m compileall -q fungi_traductor app.py
+          python -m PyInstaller --version
+      - name: Run regression tests
+        run: python -m pytest --tb=short
+
+  windows-package:
+    if: github.event_name == 'push'
+    needs: windows-compatibility
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress --yes
+      - name: Build portable executable and installer
+        shell: cmd
+        env:
+          CI: true
+        run: build_exe.bat
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: fungi-traductor-windows
+          path: |
+            dist/FungiTraductor.exe
+            dist/FungiTraductor-Setup.exe
+          if-no-files-found: error

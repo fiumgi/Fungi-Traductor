@@ -1,0 +1,7 @@
+include app.py
+include build_exe.bat
+include build_exe.sh
+include installer.iss
+include requirements.txt
+include .github/workflows/tests.yml
+recursive-include tests *.py
