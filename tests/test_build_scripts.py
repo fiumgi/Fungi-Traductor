@@ -20,3 +20,14 @@ def test_windows_build_script_is_independent_of_the_calling_directory():
     assert 'cd /d "%~dp0"' in script
     assert "python -m pip install -r requirements.txt" in script
     assert "--collect-all odf" in script
+    assert 'installer.iss' in script
+    assert 'dist\\FungiTraductor-Setup.exe' in script
+
+
+def test_windows_installer_contains_portable_payload_and_user_installation():
+    script = (ROOT / "installer.iss").read_text(encoding="utf-8")
+
+    assert "PrivilegesRequired=lowest" in script
+    assert "DefaultDirName={localappdata}\\Programs\\{#AppName}" in script
+    assert 'Source: "dist\\FungiTraductor.exe"' in script
+    assert "OutputBaseFilename=FungiTraductor-Setup" in script

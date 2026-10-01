@@ -75,13 +75,40 @@ echo.
 if exist dist\FungiTraductor.exe (
     echo ============================================
     echo  [OK] PROCESO COMPLETADO
-    echo  Ejecutable en: dist\FungiTraductor.exe
+    echo  Portable en: dist\FungiTraductor.exe
     echo ============================================
 ) else (
     echo ============================================
     echo  [ERROR] El build ha fallado.
     echo  Revisa los mensajes de arriba para mas info.
     echo ============================================
+    exit /b 1
 )
 
+:: 6. Instalador Windows (opcional; requiere Inno Setup 6)
+if defined ISCC if not exist "%ISCC%" set "ISCC="
+if defined ISCC if exist "%ISCC%" set "ISCC=%ISCC%"
+if not defined ISCC if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if not defined ISCC if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+if not defined ISCC (
+    where iscc >nul 2>&1
+    if not errorlevel 1 set "ISCC=iscc"
+)
+
+if defined ISCC (
+    echo [INFO] Generando instalador FungiTraductor-Setup.exe...
+    "%ISCC%" installer.iss
+    if errorlevel 1 (
+        echo [ERROR] Inno Setup no pudo generar el instalador.
+        exit /b 1
+    )
+    if exist dist\FungiTraductor-Setup.exe (
+        echo  Instalador en: dist\FungiTraductor-Setup.exe
+    )
+) else (
+    echo [WARN] Inno Setup 6 no esta instalado; se conserva el portable.
+    echo [INFO] Descarga: https://jrsoftware.org/isinfo.php
+)
+
+if /i "%CI%"=="true" exit /b 0
 pause

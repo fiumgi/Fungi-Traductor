@@ -80,10 +80,18 @@ Tesseract y el dispositivo de audio se verifican por separado.
 
 Si prefieres generar un archivo `.exe` o un binario de Linux que no requiera instalar Python:
 
-- **Windows**: Ejecuta el archivo `build_exe.bat`.
+- **Windows**: Ejecuta el archivo `build_exe.bat`. Genera el portable
+  `dist/FungiTraductor.exe` y, si Inno Setup 6 está instalado, el instalador
+  `dist/FungiTraductor-Setup.exe`. El instalador permite elegir la carpeta,
+  crea accesos directos y añade el desinstalador.
 - **Linux**: Ejecuta `./build_exe.sh` (asegúrate de darle permisos: `chmod +x build_exe.sh`).
 
 El resultado aparecerá en la carpeta `dist/`.
+
+Para generar el instalador Windows localmente, instala [Inno Setup 6](https://jrsoftware.org/isinfo.php)
+y vuelve a ejecutar `build_exe.bat`. Si no instalas Inno Setup, el ejecutable
+portable seguirá disponible. En GitHub Actions, el job `windows-package` publica
+ambos archivos como artefacto descargable en cada `push`.
 
 ---
 
@@ -101,6 +109,7 @@ Fungi-Traductor/
 ├── app.py                    # Wrapper de inicio rápido
 ├── build_exe.bat             # Compilador (Windows)
 ├── build_exe.sh              # Compilador (Linux)
+├── installer.iss              # Configuración del instalador Windows
 ├── pyproject.toml            # Configuración de empaquetado y pipx
 ├── requirements.txt          # Dependencias del proyecto
 └── README.md                 # Documentación del proyecto
